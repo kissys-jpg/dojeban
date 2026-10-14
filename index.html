@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>도제반 알림판</title>
 <meta name="description" content="경기항공고 로봇자동화과 전자기기생산 L2 도제반 알림판">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#16232f">
+<meta name="apple-mobile-web-app-title" content="도제반">
 <style>
   :root { --bg:#f4f6f8; --ink:#17212b; --muted:#5f6b76; --accent:#d9541e; }
   @media (prefers-color-scheme: dark) { :root { --bg:#14181c; --ink:#e8edf1; --muted:#9aa6b1; } }
@@ -41,7 +47,9 @@
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
     .then(function (html) {
       if (html.indexOf("<html") < 0) throw new Error("bad");
-      var inject = "<script>window.DOJEBAN_API=" + JSON.stringify(API) + ";<\/script>";
+      /* 알림판 화면으로 바뀐 뒤에도 즐겨찾기·홈 화면 아이콘이 유지되도록 아이콘 태그를 함께 넣음 */
+      var icons = '<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#16232f"><meta name="apple-mobile-web-app-title" content="도제반">';
+      var inject = icons + "<script>window.DOJEBAN_API=" + JSON.stringify(API) + ";<\/script>";
       html = html.replace(/<head([^>]*)>/i, "<head$1>" + inject);
       document.open(); document.write(html); document.close();
     })
