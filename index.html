@@ -60,17 +60,26 @@
       html = html.replace(/<head([^>]*)>/i, "<head$1>" + inject);
       document.open(); document.write(html); document.close();
   }
-  /* 화면 코드는 GitHub Pages의 app.html(웹앱에서 15분마다 받아 둠)을 먼저 읽습니다. 웹앱 ?raw=1은 10초 이상 걸려서 app.html이 없거나 깨졌을 때만 씁니다. */
+  /* 화면 코드는 GitHub Pages의 app.html(웹앱에서 5분마다 받아 둠)을 먼저 읽습니다. 웹앱 ?raw=1은 10초 이상 걸려서 app.html이 없거나 깨졌을 때만 씁니다. */
   function getScreen(url, opt){return fetch(url, opt).then(function(r){if(!r.ok)throw new Error(r.status);return r.text();}).then(function(html){if(!valid(html))throw new Error("bad screen");return html;});}
-  function readFresh(){return getScreen("app.html", { cache: "no-cache" })
-    .catch(function(){return getScreen(API + "?raw=1", { credentials: "omit", cache: "no-store" });})
-    .then(function(html){try{localStorage.setItem(KEY,JSON.stringify({api:API,at:Date.now(),html:html}));}catch(ignore){}return html;});}
+  function keep(html){try{localStorage.setItem(KEY,JSON.stringify({api:API,at:Date.now(),html:html}));}catch(ignore){}return html;}
+  function appHtml(){return getScreen("app.html", { cache: "no-cache" });}
+  function rawHtml(){return getScreen(API + "?raw=1", { credentials: "omit", cache: "no-store" });}
+  function readFresh(){return appHtml().catch(rawHtml).then(keep);}
+  /* 화면 코드의 버전(dj-build)과 서버가 알려 주는 버전(build)을 비교합니다.
+     배포 직후 app.html이 아직 옛 버전이면 기다리지 않고 웹앱에서 새 화면을 바로 받아 '새 화면 버전 적용'을 띄웁니다. */
+  function buildOf(html){var m=String(html||"").match(/<meta name="dj-build" content="([^"]*)">/);return m?m[1]:"";}
+  function newest(build){return appHtml().then(function(h){return buildOf(h)===build?h:rawHtml();}).catch(rawHtml).then(function(h){if(buildOf(h)===build)keep(h);return h;});}
+  function offer(){var add=function(){if(document.getElementById("screenUpdate"))return;var box=document.createElement("div");box.id="screenUpdate";box.style.cssText="position:fixed;bottom:16px;right:16px;z-index:30;background:#fff;color:#17212b;border:1px solid #d7dee6;border-radius:10px;padding:12px;box-shadow:0 4px 18px #0002;max-width:calc(100vw - 56px)";var button=document.createElement("button");button.type="button";button.className="btn sm";button.textContent="새 화면 버전 적용 (새로고침)";button.onclick=function(){location.reload();};box.appendChild(button);document.body.appendChild(box);};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",add,{once:true});else add();}
+  var current=cached?cached.html:"";
+  var screenReady=cached?Promise.resolve(cached.html):readFresh();
+  if(cached)show(cached.html);else screenReady.then(function(h){current=h;show(h);}).catch(fail);
   /* 재방문 시 첫 데이터 응답 뒤에 화면 업데이트를 확인해 초기 요청과 겹치지 않습니다. */
-  var fresh=cached?window.DOJEBAN_BOOT.promise.then(readFresh):readFresh();
-  if(cached){
-    show(cached.html);
-    fresh.then(function(html){if(html===cached.html)return;var add=function(){if(document.getElementById("screenUpdate"))return;var box=document.createElement("div");box.id="screenUpdate";box.style.cssText="position:fixed;bottom:16px;right:16px;z-index:30;background:#fff;color:#17212b;border:1px solid #d7dee6;border-radius:10px;padding:12px;box-shadow:0 4px 18px #0002;max-width:calc(100vw - 56px)";var button=document.createElement("button");button.type="button";button.className="btn sm";button.textContent="새 화면 버전 적용 (새로고침)";button.onclick=function(){location.reload();};box.appendChild(button);document.body.appendChild(box);};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",add,{once:true});else add();}).catch(function(){});
-  }else fresh.then(show).catch(fail);
+  screenReady.then(function(){return window.DOJEBAN_BOOT.promise;}).then(function(boot){
+    var res=boot&&boot.response,build=res&&res.data&&res.data.build;
+    if(build){ if(buildOf(current)===build)return; return newest(build).then(function(h){if(buildOf(h)===build&&h!==current)offer();}); }
+    if(cached)return readFresh().then(function(h){if(h!==cached.html)offer();});
+  }).catch(function(){});
 
 })();
 </script>
