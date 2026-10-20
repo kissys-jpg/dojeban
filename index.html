@@ -39,10 +39,15 @@
    알림판을 고쳐도 이 파일은 바꿀 필요가 없습니다. */
 (function () {
   var API = "https:\/\/script.google.com/macros/s/AKfycbyaTXTXAmoXxjeEebwz63u_1EzDE2C1AtqT7OHvdafUlxa6ZiukZ6BgSgNiKmuhScDP/exec";
-  function fail() {
+  /* 진행 표시: 어느 단계에서 멈췄는지 보이도록 단계와 경과 시간을 적습니다. */
+  var T0=Date.now(),stage="화면 코드 받는 중",done=false,tick=setInterval(function(){if(done){clearInterval(tick);return;}var el=document.getElementById("msg");if(el)el.textContent=stage+" · "+((Date.now()-T0)/1000).toFixed(1)+"초";},200);
+  function setStage(t){stage=t;}
+  function fail(e) {
+    done=true;
     document.getElementById("bar").style.display = "none";
-    document.getElementById("msg").innerHTML = "알림판을 불러오지 못했습니다. 인터넷 연결을 확인하고 <a href=\"\" onclick=\"location.reload();return false\">다시 시도</a>해 주세요.";
+    document.getElementById("msg").innerHTML = "알림판을 불러오지 못했습니다(" + String((e&&e.message)||e||"알 수 없음").replace(/[&<>]/g,"") + ", " + stage + "). 인터넷 연결을 확인하고 <a href=\"\" onclick=\"location.reload();return false\">다시 시도</a>해 주세요. 계속되면 이 화면을 캡처해 선생님께 보내 주세요.";
   }
+  window.addEventListener("error",function(e){if(!done)fail(e.message||"화면 오류");});
   /* 초기 데이터는 화면 코드와 동시에 요청합니다. 결과는 메모리에서 한 번만 사용합니다. */
   var saved = {}; try { saved = JSON.parse(localStorage.getItem("dj.cred") || "null") || {}; } catch (e) {}
   window.DOJEBAN_BOOT = { started: Date.now(), homeOnly: true, credential: JSON.stringify(saved), promise:
@@ -58,13 +63,15 @@
       var icons = '<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#16232f"><meta name="apple-mobile-web-app-title" content="도제반">';
       var inject = icons + "<script>window.DOJEBAN_API=" + JSON.stringify(API) + ";<\/script>";
       html = html.replace(/<head([^>]*)>/i, "<head$1>" + inject);
+      done=true; setStage("화면 여는 중");
       document.open(); document.write(html); document.close();
   }
   /* 화면 코드는 GitHub Pages의 app.html(웹앱에서 5분마다 받아 둠)을 먼저 읽습니다. 웹앱 ?raw=1은 10초 이상 걸려서 app.html이 없거나 깨졌을 때만 씁니다. */
-  function getScreen(url, opt){return fetch(url, opt).then(function(r){if(!r.ok)throw new Error(r.status);return r.text();}).then(function(html){if(!valid(html))throw new Error("bad screen");return html;});}
+  function withTimeout(p,ms,label){return new Promise(function(ok,no){var t=setTimeout(function(){no(new Error(label+" 시간 초과"));},ms);p.then(function(v){clearTimeout(t);ok(v);},function(e){clearTimeout(t);no(e);});});}
+  function getScreen(url, opt, ms){return withTimeout(fetch(url, opt),ms||10000,url.indexOf("raw=1")>=0?"웹앱 화면":"app.html").then(function(r){if(!r.ok)throw new Error(r.status);return r.text();}).then(function(html){if(!valid(html))throw new Error("bad screen");return html;});}
   function keep(html){try{localStorage.setItem(KEY,JSON.stringify({api:API,at:Date.now(),html:html}));}catch(ignore){}return html;}
   function appHtml(){return getScreen("app.html", { cache: "no-cache" });}
-  function rawHtml(){return getScreen(API + "?raw=1", { credentials: "omit", cache: "no-store" });}
+  function rawHtml(){setStage("예비 경로(웹앱)로 화면 받는 중");return getScreen(API + "?raw=1", { credentials: "omit", cache: "no-store" }, 40000);}
   function readFresh(){return appHtml().catch(rawHtml).then(keep);}
   /* 화면 코드의 버전(dj-build)과 서버가 알려 주는 버전(build)을 비교합니다.
      배포 직후 app.html이 아직 옛 버전이면 기다리지 않고 웹앱에서 새 화면을 바로 받아 '새 화면 버전 적용'을 띄웁니다. */
@@ -74,7 +81,7 @@
   var bootPromise=window.DOJEBAN_BOOT.promise; /* 화면이 시작하면서 DOJEBAN_BOOT를 비우므로 미리 잡아 둠 */
   var current=cached?cached.html:"";
   var screenReady=cached?Promise.resolve(cached.html):readFresh();
-  if(cached)show(cached.html);else screenReady.then(function(h){current=h;show(h);}).catch(fail);
+  if(cached){try{show(cached.html);}catch(e){done=false;try{localStorage.removeItem(KEY);}catch(ignore){}fail(e);}}else screenReady.then(function(h){current=h;show(h);}).catch(fail);
   /* 재방문 시 첫 데이터 응답 뒤에 화면 업데이트를 확인해 초기 요청과 겹치지 않습니다. */
   screenReady.then(function(){return bootPromise;}).then(function(boot){
     var res=boot&&boot.response,build=res&&res.data&&res.data.build;
