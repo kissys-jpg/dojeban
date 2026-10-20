@@ -45,13 +45,13 @@
   }
   /* 초기 데이터는 화면 코드와 동시에 요청합니다. 결과는 메모리에서 한 번만 사용합니다. */
   var saved = {}; try { saved = JSON.parse(localStorage.getItem("dj.cred") || "null") || {}; } catch (e) {}
-  window.DOJEBAN_BOOT = { started: Date.now(), credential: JSON.stringify(saved), promise:
-    fetch(API, { method: "POST", credentials: "omit", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ fn: "api", req: { action: "load", payload: { deferLinks: true }, cred: saved, withLoad: false } }) })
+  window.DOJEBAN_BOOT = { started: Date.now(), homeOnly: true, credential: JSON.stringify(saved), promise:
+    fetch(API, { method: "POST", credentials: "omit", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ fn: "api", req: { action: "load", payload: { deferLinks: true, homeOnly: true }, cred: saved, withLoad: false } }) })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (response) { return { response: response }; }).catch(function () { return {}; }) };
   /* 캐시에는 서버가 보내는 정적 화면 코드만 보관합니다. load 응답·학생 자료·인증값은 넣지 않습니다. */
   var KEY="dj.ui.shell.v1",cached=null;
-  function valid(html){return typeof html==="string"&&html.length<1500000&&html.indexOf('data-ui-shell="v1"')>=0&&html.indexOf('function setData(')>=0&&html.indexOf('id="shell"')>=0;}
+  function valid(html){return typeof html==="string"&&html.length<1500000&&html.indexOf('data-ui-shell="v1"')>=0&&html.indexOf('data-home-boot="v1"')>=0&&html.indexOf('function setData(')>=0&&html.indexOf('id="shell"')>=0;}
   try{var c=JSON.parse(localStorage.getItem(KEY)||"null");if(c&&c.api===API&&c.at<=Date.now()&&Date.now()-c.at<86400000&&valid(c.html))cached=c;}catch(ignore){}
   function show(html){
       /* 알림판 화면으로 바뀐 뒤에도 즐겨찾기·홈 화면 아이콘이 유지되도록 아이콘 태그를 함께 넣음 */
