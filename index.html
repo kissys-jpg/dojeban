@@ -71,11 +71,12 @@
   function buildOf(html){var m=String(html||"").match(/<meta name="dj-build" content="([^"]*)">/);return m?m[1]:"";}
   function newest(build){return appHtml().then(function(h){return buildOf(h)===build?h:rawHtml();}).catch(rawHtml).then(function(h){if(buildOf(h)===build)keep(h);return h;});}
   function offer(){var add=function(){if(document.getElementById("screenUpdate"))return;var box=document.createElement("div");box.id="screenUpdate";box.style.cssText="position:fixed;bottom:16px;right:16px;z-index:30;background:#fff;color:#17212b;border:1px solid #d7dee6;border-radius:10px;padding:12px;box-shadow:0 4px 18px #0002;max-width:calc(100vw - 56px)";var button=document.createElement("button");button.type="button";button.className="btn sm";button.textContent="새 화면 버전 적용 (새로고침)";button.onclick=function(){location.reload();};box.appendChild(button);document.body.appendChild(box);};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",add,{once:true});else add();}
+  var bootPromise=window.DOJEBAN_BOOT.promise; /* 화면이 시작하면서 DOJEBAN_BOOT를 비우므로 미리 잡아 둠 */
   var current=cached?cached.html:"";
   var screenReady=cached?Promise.resolve(cached.html):readFresh();
   if(cached)show(cached.html);else screenReady.then(function(h){current=h;show(h);}).catch(fail);
   /* 재방문 시 첫 데이터 응답 뒤에 화면 업데이트를 확인해 초기 요청과 겹치지 않습니다. */
-  screenReady.then(function(){return window.DOJEBAN_BOOT.promise;}).then(function(boot){
+  screenReady.then(function(){return bootPromise;}).then(function(boot){
     var res=boot&&boot.response,build=res&&res.data&&res.data.build;
     if(build){ if(buildOf(current)===build)return; return newest(build).then(function(h){if(buildOf(h)===build&&h!==current)offer();}); }
     if(cached)return readFresh().then(function(h){if(h!==cached.html)offer();});
