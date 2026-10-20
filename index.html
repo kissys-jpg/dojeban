@@ -58,7 +58,14 @@
   var KEY="dj.ui.shell.v1",cached=null;
   function valid(html){return typeof html==="string"&&html.length<1500000&&html.indexOf('data-ui-shell="v1"')>=0&&html.indexOf('data-home-boot="v1"')>=0&&html.indexOf('function setData(')>=0&&html.indexOf('id="shell"')>=0;}
   try{var c=JSON.parse(localStorage.getItem(KEY)||"null");if(c&&c.api===API&&c.at<=Date.now()&&Date.now()-c.at<86400000&&valid(c.html))cached=c;}catch(ignore){}
+  /* 저장된 화면은 이 스크립트가 아직 읽히는 도중에 쓰이면 기존 '불러오는 중' 화면 아래에 덧붙여집니다(내용이 화면 밖으로 밀려 로딩만 보임).
+     그래서 페이지 읽기가 끝난 뒤 문서를 통째로 바꾸고, 혹시 남는 대기 화면은 지웁니다. */
   function show(html){
+      if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",function(){setTimeout(function(){showNow(html);},0);},{once:true});return;}
+      showNow(html);
+  }
+  function showNow(html){
+      var w=document.getElementById("wait");if(w&&w.parentNode)w.parentNode.removeChild(w);
       /* 알림판 화면으로 바뀐 뒤에도 즐겨찾기·홈 화면 아이콘이 유지되도록 아이콘 태그를 함께 넣음 */
       var icons = '<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#16232f"><meta name="apple-mobile-web-app-title" content="도제반">';
       var inject = icons + "<script>window.DOJEBAN_API=" + JSON.stringify(API) + ";<\/script>";
