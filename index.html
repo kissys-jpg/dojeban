@@ -49,17 +49,25 @@
     fetch(API, { method: "POST", credentials: "omit", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ fn: "api", req: { action: "load", payload: { deferLinks: true }, cred: saved, withLoad: false } }) })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (response) { return { response: response }; }).catch(function () { return {}; }) };
-  fetch(API + "?raw=1", { credentials: "omit", cache: "no-store" })
-    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
-    .then(function (html) {
-      if (html.indexOf("<html") < 0) throw new Error("bad");
+  /* 캐시에는 서버가 보내는 정적 화면 코드만 보관합니다. load 응답·학생 자료·인증값은 넣지 않습니다. */
+  var KEY="dj.ui.shell.v1",cached=null;
+  function valid(html){return typeof html==="string"&&html.length<1500000&&html.indexOf('data-ui-shell="v1"')>=0&&html.indexOf('function setData(')>=0&&html.indexOf('id="shell"')>=0;}
+  try{var c=JSON.parse(localStorage.getItem(KEY)||"null");if(c&&c.api===API&&c.at<=Date.now()&&Date.now()-c.at<86400000&&valid(c.html))cached=c;}catch(ignore){}
+  function show(html){
       /* 알림판 화면으로 바뀐 뒤에도 즐겨찾기·홈 화면 아이콘이 유지되도록 아이콘 태그를 함께 넣음 */
       var icons = '<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#16232f"><meta name="apple-mobile-web-app-title" content="도제반">';
       var inject = icons + "<script>window.DOJEBAN_API=" + JSON.stringify(API) + ";<\/script>";
       html = html.replace(/<head([^>]*)>/i, "<head$1>" + inject);
       document.open(); document.write(html); document.close();
-    })
-    .catch(fail);
+  }
+  var fresh=fetch(API + "?raw=1", { credentials: "omit", cache: "no-store" })
+    .then(function(r){if(!r.ok)throw new Error(r.status);return r.text();})
+    .then(function(html){if(!valid(html))throw new Error("bad screen");try{localStorage.setItem(KEY,JSON.stringify({api:API,at:Date.now(),html:html}));}catch(ignore){}return html;});
+  if(cached){
+    show(cached.html);
+    fresh.then(function(html){if(html===cached.html)return;var add=function(){if(document.getElementById("screenUpdate"))return;var box=document.createElement("div");box.id="screenUpdate";box.style.cssText="position:fixed;bottom:16px;right:16px;z-index:30;background:#fff;color:#17212b;border:1px solid #d7dee6;border-radius:10px;padding:12px;box-shadow:0 4px 18px #0002;max-width:calc(100vw - 56px)";var button=document.createElement("button");button.type="button";button.className="btn sm";button.textContent="새 화면 버전 적용 (새로고침)";button.onclick=function(){location.reload();};box.appendChild(button);document.body.appendChild(box);};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",add,{once:true});else add();}).catch(function(){});
+  }else fresh.then(show).catch(fail);
+
 })();
 </script>
 </body>
