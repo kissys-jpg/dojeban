@@ -1,0 +1,33 @@
+# 알림판 화면 코드(app.html)를 웹앱에서 받아 GitHub Pages에 올려 둡니다.
+# 입구 페이지는 이 정적 파일을 먼저 읽어서, 느린 웹앱 ?raw=1 호출(10초 이상) 없이 화면을 바로 띄웁니다.
+# 웹앱이 새로 배포되면 늦어도 15분 안에 app.html이 따라 바뀝니다. 학생 자료는 담기지 않습니다(화면 코드만).
+name: 화면 코드 맞추기
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sync-app
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 웹앱에서 화면 코드 받기
+        run: |
+          API="https://script.google.com/macros/s/AKfycbyaTXTXAmoXxjeEebwz63u_1EzDE2C1AtqT7OHvdafUlxa6ZiukZ6BgSgNiKmuhScDP/exec"
+          curl -fsSL --retry 3 --max-time 120 "$API?raw=1" -o app.new
+          size=$(wc -c < app.new)
+          if [ "$size" -lt 100000 ] || ! grep -q 'data-ui-shell="v1"' app.new || ! grep -q 'function setData(' app.new; then
+            echo "받은 화면 코드가 올바르지 않아 건너뜁니다 ($size bytes)"; rm -f app.new; exit 0
+          fi
+          if [ -f app.html ] && cmp -s app.new app.html; then echo "바뀐 내용 없음"; rm -f app.new; exit 0; fi
+          mv app.new app.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.html
+          git commit -m "화면 코드 갱신 ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git push
