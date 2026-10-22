@@ -72,6 +72,8 @@
       html = html.replace(/<head([^>]*)>/i, "<head$1>" + inject);
       done=true; setStage("화면 여는 중");
       document.open(); document.write(html); document.close();
+      /* 화면을 띄운 뒤 사용자가 손대기 시작했는지 기억합니다(옛 화면 자동 교체 여부 판단). */
+      window.__djTouched=false;["pointerdown","keydown","touchstart"].forEach(function(t){window.addEventListener(t,function(){window.__djTouched=true;},{capture:true,once:true});});
   }
   /* 화면 코드는 GitHub Pages의 app.html(웹앱에서 5분마다 받아 둠)을 먼저 읽습니다. 웹앱 ?raw=1은 10초 이상 걸려서 app.html이 없거나 깨졌을 때만 씁니다. */
   function withTimeout(p,ms,label){return new Promise(function(ok,no){var t=setTimeout(function(){no(new Error(label+" 시간 초과"));},ms);p.then(function(v){clearTimeout(t);ok(v);},function(e){clearTimeout(t);no(e);});});}
@@ -92,7 +94,9 @@
   /* 재방문 시 첫 데이터 응답 뒤에 화면 업데이트를 확인해 초기 요청과 겹치지 않습니다. */
   screenReady.then(function(){return bootPromise;}).then(function(boot){
     var res=boot&&boot.response,build=res&&res.data&&res.data.build;
-    if(build){ if(buildOf(current)===build)return; return newest(build).then(function(h){if(buildOf(h)===build&&h!==current)offer();}); }
+    if(build){ if(buildOf(current)===build)return; return newest(build).then(function(h){if(buildOf(h)!==build||h===current)return;
+      /* 다른 AI·사람이 배포한 직후 app.html이 아직 옛 버전이면, 손대기 전(20초 안)에는 새 화면으로 바로 바꾸고 그 뒤면 버튼으로 알립니다. */
+      if(!window.__djTouched&&Date.now()-T0<20000){current=h;showNow(h);}else offer();}); }
     if(cached)return readFresh().then(function(h){if(h!==cached.html)offer();});
   }).catch(function(){});
 
