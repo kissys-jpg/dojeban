@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="c8e6cc5">
+<meta name="dj-build" content="340924c">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1272,7 +1272,7 @@ let introQuery='',introState='all';
 function introHandouts(){const docs=(D.materials||[]).filter(m=>m.category==='직무체험 준비'&&/사전소개서|사전 소개서/.test(m.title));return docs.length?'<div class="row">'+docs.map(m=>'<button class="btn sm" data-file="'+esc(m.file)+'">'+esc(m.title)+'</button>').join(''):'';}
 function vExperienceIntros(){const list=D.experienceIntros||[],q=introQuery.trim().toLowerCase(),shown=list.filter(i=>(introState==='all'||i.status===introState)&&[i.name,i.companyName,(i.answers||{}).jobInterest].join(' ').toLowerCase().includes(q));
  let h=extraHead(T()?'기업 제출용 자기소개서 관리':'기업 제출용 자기소개서','직접 작성하거나 양식을 받아 파일로 제출하세요. 제출본은 본인과 선생님만 확인합니다.',T()&&!D.introAuthRequired?'<button class="btn" data-intro-management>취합 시트 열기</button>':'');
- if(D.introAuthRequired)return h+'<section class="panel pad"><p>제출하려면 학생 이름과 PIN으로 들어오세요.</p><div class="row"><button class="btn pri" data-intro-student-login>학생으로 작성·제출</button><button class="btn" data-intro-template>양식 받기</button><button class="btn ghost" data-intro-teacher-login>선생님 확인</button></div></section>';
+ if(D.introAuthRequired)return h+'<section class="panel pad"><p>로그인 없이 이름과 학년을 입력하고 제출하세요. 제출본은 선생님만 확인합니다.</p><div class="row"><button class="btn pri" data-intro-entry>작성·파일 제출</button><button class="btn" data-intro-template>양식 받기 (Word)</button><button class="btn ghost" data-intro-teacher-login>선생님 확인</button></div></section>';
  if(!T())h+='<section class="panel pad"><div class="row"><button class="btn pri" data-intro-new>바로 작성</button><button class="btn" data-intro-template>양식 받기 (Word)</button><button class="btn" data-intro-upload>파일 제출</button></div></section>';
  if(T()){const names=new Set(list.map(i=>i.name)),missing=(D.roster||[]).filter(r=>['pre1','pre2'].includes(r.group)&&!names.has(r.name));h+='<section class="panel pad"><div class="row"><span class="chip">제출 '+list.length+'건</span><span class="chip">확인 '+list.filter(i=>i.status==='확인').length+'건</span><span class="chip">미제출 예비학생 '+missing.length+'명</span><button class="btn sm" data-intro-print-all>확인본 모아 인쇄/PDF</button></div><details><summary>미제출 학생 확인</summary><p>'+esc(missing.map(r=>r.name).join(' · ')||'없음')+'</p></details><p class="ev-s">취합 시트는 교사 전용입니다. 기업에는 필요한 학생의 확인본만 전달하고, 제공 범위와 필요한 안내·동의를 먼저 확인하세요. 학생 보완 의견은 기업 전달본에서 제외합니다.</p><div class="fgrid"><label class="fld"><span>이름·기업·희망 직무 검색</span><input id="introQuery" value="'+esc(introQuery)+'"></label>'+sel('상태','introState',[['all','전체'],['제출','제출'],['보완요청','보완요청'],['확인','확인']],introState)+'</div></section>';}
  return h+(shown.length?shown.map(i=>'<section class="panel pad"><div class="row"><span class="chip">'+esc(i.status)+'</span><b>'+esc(T()?i.name:'나의 자기소개')+'</b><span class="ev-s">'+esc(i.company?i.companyName:'기업 미정')+' · '+esc(i.updated)+'</span></div><h3>'+esc((i.answers||{}).headline||(i.file?'파일로 제출한 자기소개서':'작성 중인 자기소개'))+'</h3><details><summary>작성 내용 보기</summary>'+companyLines(Object.entries(INTRO_FIELDS).map(([k,[l]])=>[l,(i.answers||{})[k]]))+'</details>'+(i.feedback?'<p class="banner">학생 보완 의견: '+esc(i.feedback)+'</p>':'')+(i.teacherNote?'<p>기업 전달용 교사 의견: '+esc(i.teacherNote)+'</p>':'')+'<div class="row"><button class="btn" '+(T()?'data-intro-review':'data-intro-edit')+'="'+esc(i.id)+'">'+(T()?'검토·의견 남기기':'작성·수정')+'</button>'+(T()&&i.status==='확인'&&(i.answers||{}).headline?'<button class="btn" data-intro-print="'+esc(i.id)+'">기업 전달본 인쇄/PDF</button>':'')+(i.file?'<p>'+extraFile(i.file)+'</p>':'')+'</div></section>').join(''):emptyBox(T()?'조건에 맞는 제출본이 없습니다':'저장한 자기소개가 없습니다'));
@@ -1280,7 +1280,21 @@ function vExperienceIntros(){const list=D.experienceIntros||[],q=introQuery.trim
 const SIMPLE_INTRO_FIELDS=['headline','motivation','experience','skills','strength','goals'];
 function ownIntro(){return (D.experienceIntros||[]).find(i=>!i.company)||(D.experienceIntros||[])[0]||{};}
 function introLogin(teacher=false){introDeepPending=!teacher;lsSet('dj.mode',teacher?'teacher':'student');gate(teacher?'제출본을 확인하려면 선생님으로 로그인하세요.':'학생 이름과 PIN으로 들어오면 바로 작성·제출할 수 있습니다.');}
-async function openIntroEntry(){if(isGuest())return introLogin();companySub='intro';await hydrateFullData();go('company');}
+async function openIntroEntry(){if(isGuest()||D.loginDisabled||D.introAuthRequired)return publicIntroEntry();companySub='intro';await hydrateFullData();go('company');}
+
+function publicIntroEntry(){
+ openDlg('기업 제출용 자기소개서','<p>로그인 없이 제출할 수 있습니다. 이름과 학년을 정확히 입력해 주세요.</p><div class="row"><button type="button" class="btn pri" id="publicIntroWrite">바로 작성</button><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출본은 선생님만 확인합니다. 제출 후 수정이 필요하면 선생님께 말씀해 주세요.</p>','닫기',()=>true);
+ $('#publicIntroWrite').onclick=()=>{dlg.close();publicIntroDlg(false);};$('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroFile').onclick=()=>{dlg.close();publicIntroDlg(true);};
+}
+function publicIntroDlg(fileMode){
+ const submissionKey=crypto.randomUUID();let sent=false,dirty=false;
+ const identity=field('이름','publicName','','text','required maxlength="40" autocomplete="name"')+sel('학년','publicGrade',[['','선택'],['1','1학년'],['2','2학년'],['3','3학년']],'');
+ openDlg(fileMode?'자기소개서 파일 제출':'기업 제출용 자기소개서',identity+(fileMode?'<p>문서·PDF·엑셀·사진 한 개, 8MB 이하</p>'+filePicker(1).replace('파일당 '+MAX_MB+'MB','파일당 8MB'):'<p class="ev-s">각 항목에 2~3문장씩 적어 주세요.</p>'+SIMPLE_INTRO_FIELDS.map(k=>area(INTRO_FIELDS[k][0],k,'',k==='headline'?150:2500).replace('<textarea ','<textarea rows="2" placeholder="'+esc(INTRO_FIELDS[k][1])+'" ')).join(''))+'<p class="ev-s">개인 연락처·상세 주소·주민등록번호는 적지 마세요. 제출본은 선생님만 확인합니다. 이 화면을 닫으면 작성 중인 내용은 사라집니다.</p><p id="publicIntroState" role="status"></p>','제출',async()=>{
+ try{const payload={name:form.elements.publicName.value,grade:form.elements.publicGrade.value,submissionKey,confirm:true};if(fileMode){const f=draftFiles[0];if(!f)throw Error('파일을 선택해 주세요');if(f.size>8*1024*1024)throw Error('파일을 8MB 이하로 줄여 주세요');payload.mode='file';payload.upload={name:f.name,base64:await blobB64(f)};}else payload.answers=Object.fromEntries(SIMPLE_INTRO_FIELDS.map(k=>[k,form.elements[k].value]));await call('submitPublicIntro',payload,{});sent=true;toast('제출했습니다. 선생님이 확인합니다.');return true;}catch(e){$('#publicIntroState').textContent=e.message+' 입력한 내용은 그대로 있습니다. 다시 제출해 주세요.';return false;}
+ });
+ const change=()=>{dirty=true;},unload=e=>{if(dirty&&!sent&&dlg.open){e.preventDefault();e.returnValue='';}};form.addEventListener('input',change);window.addEventListener('beforeunload',unload);dlg.addEventListener('close',()=>{form.removeEventListener('input',change);window.removeEventListener('beforeunload',unload);},{once:true});
+}
+
 function experienceIntroDlg(i=ownIntro()){
  i={...i};let timer,pending=Promise.resolve(),lastSaved='',sending=false,stopped=false;const a=i.answers||{};
  const get=()=>({company:i.company||'',answers:{...a,...Object.fromEntries(SIMPLE_INTRO_FIELDS.map(k=>[k,form.elements[k].value]))}});
@@ -2311,7 +2325,7 @@ form.addEventListener("click",e=>{if(!e.target.closest("[data-mh-reset]"))return
   const quick = cachedHome(saved || {});
   if (quick) { cred = saved || {}; $("#gate").hidden = true; $("#shell").hidden = false; setData(Object.assign({}, quick, { fromCache: true })); }
   try { const data = await call("load", {deferLinks:true,homeOnly:true}, saved || {}); cred = saved || {}; $("#gate").hidden = true; $("#shell").hidden = false; if (D && !D.homeOnly && !D.fromCache) return; setData(data); }
-  catch (e) { if (quick && !/PIN|비밀번호|이름/.test(e.message)) { toast(e.message); return; } lsSet("dj.cred", null); lsSet(HOME_KEY, null); D = null; gate(e.message); }
+  catch (e) { if(location.hash==='#intro'){introDeepPending=false;$("#startupScreen").hidden=true;publicIntroEntry();return;} if (quick && !/PIN|비밀번호|이름/.test(e.message)) { toast(e.message); return; } lsSet("dj.cred", null); lsSet(HOME_KEY, null); D = null; gate(e.message); }
 })();
 setInterval(() => { if (D && document.visibilityState === "visible" && !dlg.open) reload(); }, 120000);
 })();
