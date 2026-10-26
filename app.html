@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="2dfe894">
+<meta name="dj-build" content="e6ea7ec">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -496,6 +496,7 @@ const T = () => D && D.me.role === "teacher";
 const A = () => T()&&D.me.isAdmin!==false;
 const myGroup = () => D && D.me.group || "";
 const isGuest = () => Boolean(D && D.me && D.me.role === "guest");
+const newUid = () => { try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {} const b = new Uint8Array(16); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(b) : b.forEach((_, i) => b[i] = Math.random() * 256); return Array.from(b, x => x.toString(16).padStart(2, "0")).join("").replace(/^(.{8})(.{4})(.{4})(.{4})/, "$1-$2-$3-$4-"); };
 const isViewer = () => Boolean(D && D.me && D.me.viewer);
 const VIEWER_WRITE_RE = /^data-.*(new|edit|del|save|upload|remove|review|reply|add|setup|create|share|borrow|return|assign|connect|todo|memo|myhome|account|extra|grant|decide|approve|reject|report|resolve|sync|send|seed|refresh|makepins|copypins|private|att-all|ics-make|ics-reset|tr-event|photo-default|retry|setstatus)/;
 let viewerObs=null;
@@ -1447,12 +1448,12 @@ async function loadIntroSubmissionList(){const box=form.querySelector('[data-int
 $('#dlgForm').addEventListener('click',e=>{const b=e.target.closest('[data-intro-shared]');if(!b)return;const id=b.dataset.introShared;dlg.addEventListener('close',()=>introDocumentDlg(id),{once:true});dlg.close();});
 function introSubmissionListDlg(){openDlg('자기소개서 제출 목록',introSubmissionListBox(),'닫기',()=>true);loadIntroSubmissionList();}
 function publicIntroEntry(){
- if(D&&(isGuest()||isViewer())&&D.studentLoginRequired){openDlg('자기소개서 파일 제출','<p>파일 제출과 학생 제출본 HTML 보기는 학생 이름으로 로그인한 뒤 이용해 주세요.</p><button class="btn pri" id="introGuestLogin" type="button">학생 로그인</button>','닫기',()=>true);$('#introGuestLogin').onclick=()=>{dlg.close();introLogin();};return;}
+ if(D&&isGuest()&&D.studentLoginRequired&&!D.viewer){openDlg('자기소개서 파일 제출','<p>파일 제출과 학생 제출본 HTML 보기는 학생 이름으로 로그인한 뒤 이용해 주세요.</p><button class="btn pri" id="introGuestLogin" type="button">학생 로그인</button>','닫기',()=>true);$('#introGuestLogin').onclick=()=>{dlg.close();introLogin();};return;}
  openDlg('기업 제출용 자기소개서','<p>양식을 받아 작성한 파일을 제출해 주세요. 로그인 없이 제출할 수 있습니다.</p><div class="row"><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroGuide">작성 가이드·예시</button><button type="button" class="btn pri" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다. 제출 후 수정이 필요하면 선생님께 말씀해 주세요.</p>'+introSubmissionListBox(),'닫기',()=>true);
  $('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroGuide').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(introGuideDlg),{once:true});dlg.close();};$('#publicIntroFile').onclick=()=>{dlg.close();publicIntroDlg();};loadIntroSubmissionList();
 }
 function publicIntroDlg(){
- const submissionKey=crypto.randomUUID();let sent=false,dirty=false;
+ const submissionKey=newUid();let sent=false,dirty=false;
  const bound=!!(D&&D.me&&D.me.studentId),identity=bound?'<p>제출자: '+esc(D.me.name)+' · '+esc(D.me.klass)+'</p>':field('이름','publicName','','text','required maxlength="40" autocomplete="name"')+sel('학년','publicGrade',[['','선택'],['1','1학년'],['2','2학년'],['3','3학년']],'');
  openDlg('자기소개서 파일 제출',identity+'<p>문서·PDF·엑셀·사진 한 개, 8MB 이하</p>'+filePicker(1).replace('파일당 '+MAX_MB+'MB','파일당 8MB')+'<p class="ev-s">제출 목록에 이름·학년·제출 여부가 표시됩니다. 제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다.</p><p id="publicIntroState" role="status"></p>','제출',async()=>{
  try{const f=draftFiles[0];if(!f)throw Error('파일을 선택해 주세요');if(f.size>8*1024*1024)throw Error('파일을 8MB 이하로 줄여 주세요');await call('submitPublicIntro',{name:bound?D.me.name:form.elements.publicName.value,grade:bound?D.me.studentId[0]:form.elements.publicGrade.value,submissionKey,confirm:true,mode:'file',upload:{name:f.name,base64:await blobB64(f)}},bound?cred:{});sent=true;toast('파일을 제출했습니다. 선생님이 확인합니다.');if(bound&&/\.docx$/i.test(f.name))dlg.addEventListener('close',()=>setTimeout(()=>introDocumentDlg('introPublic'+submissionKey)),{once:true});return true;}catch(e){$('#publicIntroState').textContent=e.message+' 입력한 내용과 선택한 파일은 그대로 있습니다. 다시 제출해 주세요.';return false;}
