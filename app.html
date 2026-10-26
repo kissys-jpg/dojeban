@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="1031d70">
+<meta name="dj-build" content="761382c">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -269,6 +269,16 @@ dialog::backdrop{background:rgba(10,16,22,.45)}
 dialog form{display:flex;flex-direction:column;gap:14px;padding:20px}
 dialog h3{font-size:17px}
 .dlg-act{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+dialog.intro-word-preview{box-sizing:border-box;width:calc(100vw - 16px);max-width:none;height:calc(100vh - 16px);height:calc(100dvh - 16px);max-height:none}
+dialog.intro-word-preview form{height:100%;box-sizing:border-box;min-height:0;padding:12px;gap:8px}
+[data-intro-document-status]{margin:0;font-size:13px;overflow-wrap:anywhere}
+[data-intro-document-content]{flex:1;min-height:0}
+[data-intro-document-content] iframe{width:100%;height:100%;border:0;display:block}
+dialog.document-preview{width:calc(100vw - 16px);max-width:none;height:calc(100vh - 16px);height:calc(100dvh - 16px);max-height:none;box-sizing:border-box}
+dialog.document-preview form{height:100%;min-height:0;box-sizing:border-box;padding:12px;gap:8px}
+dialog.document-preview [data-document-status]{margin:0;overflow-wrap:anywhere}
+dialog.document-preview [data-document-content]{flex:1;min-height:0;overflow:auto}
+dialog.document-preview [data-document-view=pdf]{display:block;width:100%;height:100%;border:0}
 
 .empty{padding:28px 18px;text-align:center;color:var(--muted);font-size:14px}
 .empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px;font-size:15px}
@@ -483,6 +493,7 @@ const anonGroupLabel = category => ANON_GROUPS[category] || '공통';
 const isLearner = () => !T() && myGroup() === "learner";
 let calSel = TODAY, schedMode = "cal", aftWeek = null, showPersonal = true, reqOpen = null, reqFilter = "active", openReaders = new Set(), armed = null, armT;
 const T = () => D && D.me.role === "teacher";
+const A = () => T()&&D.me.isAdmin!==false;
 const myGroup = () => D && D.me.group || "";
 const isGuest = () => Boolean(D && D.me && D.me.role === "guest");
 const GUEST_TABS = ["today", "school"];
@@ -495,7 +506,7 @@ function setBusy(d){ busy += d; $("#loading").hidden = busy <= 0; }
 function callRaw(action, payload, c, withLoad){
   setBusy(1);
   return new Promise((res, rej) => {
-    google.script.run.withSuccessHandler(r => { setBusy(-1); if (r && r.ok) res(r); else rej(new Error(r && r.error || "응답이 없습니다")); })
+    google.script.run.withSuccessHandler(r => { setBusy(-1); if(r&&r.loginRequired!==undefined)lsSet("dj.login.required",r.loginRequired?"true":"false");if (r && r.ok) res(r); else rej(Object.assign(new Error(r && r.error || "응답이 없습니다"),{loginRequired:!!(r&&r.loginRequired),studentLoginRequired:!!(r&&r.studentLoginRequired)})); })
       .withFailureHandler(e => { setBusy(-1); rej(new Error("연결이 끊겼습니다. 잠시 후 다시 시도해 주세요.")); })
       .api({ action, payload: payload || {}, cred: c || cred, withLoad: !!withLoad });
   });
@@ -518,19 +529,27 @@ function hydrateFullData(){
 function fullLoadNotice(){return '<section class="panel pad" role="status"><h2>자료를 불러오고 있습니다…</h2><p>이 메뉴에 필요한 최신 자료를 확인합니다.</p>'+(fullLoadError?'<p>'+esc(fullLoadError)+'</p><button class="btn" data-full-retry>다시 불러오기</button>':'')+'</section>';}
 $("#main").addEventListener("click",e=>{if(e.target.closest("[data-home-details],[data-full-retry]")){fullLoadError="";hydrateFullData();render();}});
 /* 첫 화면 빠르게: 이 기기에 로그인을 유지한 경우에만 마지막 첫 화면 자료(공지 3건·급식·2주 일정)를 저장해 두고, 다음 방문 때 먼저 보여 준 뒤 새 자료로 바꿉니다. 로그아웃하면 지웁니다. */
-const HOME_KEY="dj.home.v1";
+const HOME_KEY="dj.home.v2";
 const credTag=c=>{const t=JSON.stringify(c||{});let h=2166136261;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36)+"."+t.length;};
 function saveHome(d){ if(!d||!d.homeOnly)return; if(JSON.stringify(cred||{})!==(lsGet("dj.cred")||"{}"))return; try{lsSet(HOME_KEY,JSON.stringify({who:credTag(cred),day:d.today,at:Date.now(),data:d}));}catch{} }
 function cachedHome(c){ try{const x=JSON.parse(lsGet(HOME_KEY)||"null");if(!x||x.who!==credTag(c)||x.day!==ymd(new Date())||Date.now()-x.at>43200000)return null;return x.data;}catch{return null;} }
 let introDeepPending=location.hash==='#intro';
 function setData(d){ if(d&&d.homeOnly&&!d.fromCache)saveHome(d); if(!d.homeOnly)fullLoadError=""; $("#startupScreen").hidden=true; if(!D)tab=tab==="school"?"school":"today"; D = d;resourceLinkError=""; TODAY = D.today || TODAY; showUpdated(); render(); if(introDeepPending){introDeepPending=false;queueMicrotask(openIntroEntry);} }
 function showUpdated(){ const el = $("#updAt"), u = D && D.lastUpdate; if (!el) return; if (D && D.fromCache){ el.innerHTML = "저장된 화면 · 최신 자료 받는 중 <b>"+(performance.now()/1000).toFixed(1)+"초</b>"; el.hidden = false; clearTimeout(showUpdated.t); showUpdated.t = setTimeout(showUpdated, 200); return; } if (!u || !u.at){ el.textContent = ""; el.hidden = true; return; } const day = u.at.slice(0,10), hm = u.at.slice(11,16); el.textContent = "최근 업데이트 " + (day === TODAY ? "오늘" : Number(day.slice(5,7)) + "." + Number(day.slice(8,10))) + (hm ? " " + hm : "") + (u.what ? " · " + u.what : ""); el.hidden = false; }
-async function reload(){ drvStale(); const epoch=fullLoadEpoch,owner=JSON.stringify(cred||{});try { const data=await call("load", {deferLinks:true,homeOnly:!!(D&&D.homeOnly)});if(epoch!==fullLoadEpoch||owner!==JSON.stringify(cred||{}))return;if(data.homeOnly&&D&&!D.homeOnly)return;setData(data); } catch (e) { if (/PIN|비밀번호|이름/.test(e.message)) { logout(e.message); } else toast(e.message); } }
+async function reload(){ drvStale(); const epoch=fullLoadEpoch,owner=JSON.stringify(cred||{});try { const data=await call("load", {deferLinks:true,homeOnly:!!(D&&D.homeOnly)});if(epoch!==fullLoadEpoch||owner!==JSON.stringify(cred||{}))return;if(data.homeOnly&&D&&!D.homeOnly)return;setData(data); } catch (e) { if (/PIN|비밀번호|이름|로그인|등록된/.test(e.message)) { logout(e.message); } else toast(e.message); } }
 async function act(action, payload, msg){
   try { const r = await callRaw(action, payload, null, true); if (msg) toast(msg); if (r.load) setData(r.load); else await reload(); return true; }
   catch (e) { toast(e.message); return false; }
 }
 
+function storeStudentSession(token,remember){cred={session:token};lsSet('dj.cred',remember?JSON.stringify(cred):null);try{sessionStorage.setItem('dj.session',JSON.stringify(cred));}catch{}}
+function studentAccountPanel(){if(!D.me.studentId)return '';return '<section class="panel pad"><h3>내 로그인 정보</h3><p>'+esc(D.me.name)+' · 학번 '+esc(D.me.studentId)+' · '+esc(D.me.klass)+'</p><label class="check"><input type="checkbox" id="studentAccountKeep" '+(lsGet('dj.cred')?'checked':'')+'> 이 기기에 내 로그인 정보 저장</label><div class="row"><button class="btn" data-account-save>내 정보 저장</button><button class="btn" data-student-password>비밀번호 변경</button></div><p class="ev-s">저장을 선택하면 비밀번호 대신 로그인 토큰을 저장합니다. 공용 기기에서는 나갈 때 로그아웃해 주세요.</p></section>';}
+function studentPasswordDlg(){openDlg('내 비밀번호 변경',field('현재 비밀번호','currentPassword','','password','required autocomplete="current-password" maxlength="64"')+field('새 비밀번호 (5~64자)','password','','password','required minlength="5" maxlength="64" autocomplete="new-password"')+field('새 비밀번호 확인','confirmPassword','','password','required maxlength="64" autocomplete="new-password"')+'<p class="ev-s">변경하면 이전 비밀번호와 다른 기기의 저장된 로그인은 사용할 수 없습니다.</p>','변경',async fd=>{try{const remember=!!lsGet('dj.cred'),r=await call(D.me.staffAccount?'changeStaffPassword':'changeStudentPassword',{...fd,remember});storeStudentSession(r.session,remember);toast('비밀번호를 변경했습니다');return true;}catch(e){toast(e.message);return false;}});}
+function staffAccountPanel(){return '<section class="panel pad"><h3>'+esc(D.me.name)+' · '+(A()?'최고관리자':'교사')+'</h3>'+(D.me.staffAccount?'<label class="check"><input type="checkbox" id="studentAccountKeep" '+(lsGet('dj.cred')?'checked':'')+'> 이 기기에 내 로그인 정보 저장</label><div class="row"><button class="btn" data-account-save>내 정보 저장</button><button class="btn" data-staff-password>내 비밀번호 변경</button></div>':'<p>최고관리자 계정으로 교사 계정 등록을 먼저 완료해 주세요.</p>')+(A()?'<p>교사 계정·학생 계정과 전체 연동 설정은 최고관리자가 관리합니다.</p><div class="row"><button class="btn" data-setup-staff>교사 계정 등록·초기 비밀번호 설정</button><button class="btn" data-staff-list>교사 계정·권한 보기</button></div>':'')+'</section>';}
+async function staffAccountsDlg(){openDlg('교사 계정과 권한','<div id="staffAccountList" role="status">계정을 확인하는 중…</div>','닫기',()=>true);const box=$('#staffAccountList');try{const list=await call('staffAccounts');if(!box.isConnected)return;box.innerHTML=list.length?'<div class="tbl-wrap"><table><thead><tr><th>이름</th><th>권한</th><th>상태</th></tr></thead><tbody>'+list.map(a=>'<tr><td>'+esc(a.name)+'</td><td>'+(a.access==='admin'?'최고관리자':'교사')+'</td><td>'+(a.active?'사용':'중지')+'</td></tr>').join('')+'</tbody></table></div>':'등록된 교사 계정이 없습니다.';}catch(e){if(box.isConnected)box.textContent=e.message;}}
+function setupStaffDlg(){openDlg('교사 계정 등록','<p>교사 명단 파일을 선택하고 공통 초기 비밀번호를 직접 입력해 주세요. 최고관리자는 기존 관리자 비밀번호를 유지합니다.</p><input id="staffImportFile" type="file" accept=".json,application/json" required>'+field('교사 공통 초기 비밀번호','staffPassword','','password','required minlength="5" maxlength="64" autocomplete="new-password"')+'<label class="check"><input type="checkbox" name="resetTeachers" checked> 기존 교사 비밀번호도 공통 초기값으로 맞추기</label><p id="staffImportSummary" role="status"></p>','등록',async fd=>{try{const f=$('#staffImportFile').files[0];if(!f||f.size>100000)throw Error('교사 등록용 파일을 선택해 주세요');const d=JSON.parse(await f.text()),remember=!!lsGet('dj.cred'),r=await call('setupStaffAccounts',{adminName:d.adminName,teachers:d.teachers,password:fd.staffPassword,resetTeachers:fd.resetTeachers,remember});storeStudentSession(r.session,remember);toast('최고관리자 1명과 교사 '+r.teachers+'명 등록 완료');await reload();return true;}catch(e){toast(e.message);return false;}});$('#staffImportFile').onchange=async()=>{try{const f=$('#staffImportFile').files[0];if(!f||f.size>100000)throw Error();const d=JSON.parse(await f.text());$('#staffImportSummary').textContent='최고관리자 1명 · 교사 '+d.teachers.length+'명';}catch{$('#staffImportSummary').textContent='교사 등록 파일을 확인해 주세요.';}};}
+function importClass3Dlg(){openDlg('1~3학년 3반 학생 계정 등록','<p>교사 등록용 JSON 파일을 선택해 주세요. 파일의 이름과 학번만 사용하며, 초기 비밀번호는 학번입니다. 다시 등록해도 변경한 비밀번호는 유지합니다.</p><input id="class3ImportFile" type="file" accept=".json,application/json" required><p id="class3ImportSummary" role="status"></p>','등록',async()=>{try{const file=$('#class3ImportFile').files[0];if(!file||file.size>100000)throw Error('교사 등록용 JSON 파일을 선택해 주세요');const parsed=JSON.parse(await file.text()),r=await call('importClass3Students',{students:parsed.students});toast('학생 계정 '+r.total+'명 등록 완료');await reload();return true;}catch(e){toast(e.message);return false;}});$('#class3ImportFile').onchange=async()=>{try{const f=$('#class3ImportFile').files[0];if(!f||f.size>100000)throw Error();const data=JSON.parse(await f.text()),list=data.students;if(!Array.isArray(list))throw Error();$('#class3ImportSummary').textContent='등록 대상 '+list.length+'명 · 1학년 '+list.filter(s=>String(s.studentId)[0]==='1').length+'명 · 2학년 '+list.filter(s=>String(s.studentId)[0]==='2').length+'명 · 3학년 '+list.filter(s=>String(s.studentId)[0]==='3').length+'명';}catch{$('#class3ImportSummary').textContent='등록 파일을 확인해 주세요.';}};}
+$('#main').addEventListener('click',e=>{if(e.target.closest('[data-student-password],[data-staff-password]'))studentPasswordDlg();if(e.target.closest('[data-public-access]'))act('setPublicAccess',{enabled:!D.publicAccess},D.publicAccess?'로그인 필수로 잠갔습니다':'자유 접속을 허용했습니다');if(e.target.closest('[data-setup-staff]'))setupStaffDlg();if(e.target.closest('[data-staff-list]'))staffAccountsDlg();if(e.target.closest('[data-import-class3]'))importClass3Dlg();if(e.target.closest('[data-account-save]')){if(!cred||!cred.session)return;storeStudentSession(cred.session,$('#studentAccountKeep').checked);lsSet(T()?'dj.teacher.name':'dj.name',D.me.name);toast('내 로그인 정보를 저장했습니다');}});
  
 function gate(msg){
   navHistory=[];navAnchor='';
@@ -543,34 +562,36 @@ function gate(msg){
     <form id="loginForm" class="panel pad" style="display:flex;flex-direction:column;gap:12px">
       ${mode === "student" ? `
         <label class="fld"><span>이름</span><input type="text" id="lg-name" autocomplete="name" required maxlength="30" value="${esc(lsGet("dj.name") || "")}"></label>
-        <label class="fld"><span>PIN (선생님께 받은 4자리)</span><input type="password" id="lg-pin" inputmode="numeric" autocomplete="current-password" required maxlength="8"></label>`
-      : `<label class="fld"><span>선생님 비밀번호</span><input type="password" id="lg-pw" autocomplete="current-password" required></label>`}
-      <label class="check"><input type="checkbox" id="lg-keep"> 이 기기에서 로그인 유지</label>
+        <label class="fld"><span>비밀번호 (처음에는 학번)</span><input type="password" id="lg-pin" autocomplete="current-password" required maxlength="64"></label>`
+      : `<label class="fld"><span>교사 이름</span><input type="text" id="lg-teacher-name" autocomplete="username" maxlength="30" value="${esc(lsGet("dj.teacher.name")||"")}"></label><label class="fld"><span>선생님 비밀번호</span><input type="password" id="lg-pw" autocomplete="current-password" required></label>`}
+      <label class="check"><input type="checkbox" id="lg-keep"> 내 로그인 정보 저장 (이 기기)</label>
       <button class="btn pri" type="submit">들어가기</button>
     </form>
-    <button class="btn ghost" type="button" id="guestBrowse">로그인 없이 둘러보기</button>
-    <p style="font-size:13px">로그인 없이 보면 전체 공지·급식·시간표·학교 일정만 보입니다. PIN을 모르면 선생님께 물어보세요. 홈 화면에 추가하면 앱처럼 열 수 있습니다.</p></div>`;
-  $("#guestBrowse").onclick = () => enterGuest();
+    ${lsGet("dj.login.required")==="true"?"":'<button class="btn ghost" type="button" id="guestBrowse">로그인 없이 둘러보기</button>'}
+    <p style="font-size:13px">1~3학년 3반 학생은 이름과 비밀번호로 로그인하세요. 초기 비밀번호는 학번(예: 20313)입니다. 홈 화면에 추가하면 앱처럼 열 수 있습니다.</p></div>`;
+  if($("#guestBrowse"))$("#guestBrowse").onclick = () => enterGuest();
   $("#gate").querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { lsSet("dj.mode", b.dataset.mode); gate(); });
   $("#loginForm").onsubmit = async e => {
     e.preventDefault();
-    const c = mode === "student" ? { name: $("#lg-name").value.trim(), pin: $("#lg-pin").value.trim() } : { teacher: $("#lg-pw").value };
+    const c = mode === "student" ? { name: $("#lg-name").value.trim(), pin: $("#lg-pin").value.trim() } : { teacherName:$("#lg-teacher-name").value.trim(),teacher: $("#lg-pw").value };
     try {
-      const data = await call("load", {deferLinks:true,homeOnly:true}, c);
-      cred = c;
-      if ($("#lg-keep").checked) lsSet("dj.cred", JSON.stringify(c)); else lsSet("dj.cred", null);
-      if (c.name) lsSet("dj.name", c.name);
+      const login=await call("login",{remember:$("#lg-keep").checked},c),authCred=login.session?{session:login.session}:c;
+      const data = await call("load", {deferLinks:true,homeOnly:true}, authCred);
+      cred = authCred;
+      if ($("#lg-keep").checked) lsSet("dj.cred", JSON.stringify(cred)); else lsSet("dj.cred", null);
+      try{if(cred.session)sessionStorage.setItem("dj.session",JSON.stringify(cred));else sessionStorage.removeItem("dj.session");}catch{}
+      if (c.name) lsSet("dj.name", c.name);if(c.teacherName)lsSet("dj.teacher.name",c.teacherName);
       $("#gate").hidden = true; $("#shell").hidden = false;
       setData(data);
     } catch (err) { gate(err.message); }
   };
 }
-function logout(msg){ fullLoadEpoch++;fullLoadPending=null;fullLoadError=""; clearGlobalSearch(); todayDriveNews.clear();todayNewsOwner="";resourceLinkEpoch++;resourceLinkPending=null; if (D && D.loginDisabled) return reload(); const guestOk = Boolean(D && D.guestView); cred = null; D = null; noticeImages.clear(); noticeImagesPending.clear(); lsSet("dj.cred", null); lsSet(HOME_KEY, null); if (guestOk && !msg) return enterGuest(); gate(msg); }
+function logout(msg){ if(cred&&cred.session)call("logoutSession",{token:cred.session}).catch(()=>{});try{sessionStorage.removeItem("dj.session");}catch{}fullLoadEpoch++;fullLoadPending=null;fullLoadError=""; clearGlobalSearch(); todayDriveNews.clear();todayNewsOwner="";resourceLinkEpoch++;resourceLinkPending=null; if (D && D.loginDisabled) return reload(); const guestOk = Boolean(D && D.guestView); cred = null; D = null; noticeImages.clear(); noticeImagesPending.clear(); lsSet("dj.cred", null); lsSet(HOME_KEY, null); if (guestOk && !msg) return enterGuest(); gate(msg); }
 $("#logoutTop").onclick = () => isGuest() ? gate() : logout();
- 
+/* 로그인 없이 둘러보기: 비어 있는 로그인 정보로 들어오면 서버가 '손님'으로 공개 자료만 보냅니다. */
 async function enterGuest(){ try { const data = await call("load", {deferLinks:true,homeOnly:true}, {}); if (!data.me || data.me.role !== "guest" && !data.loginDisabled) throw new Error("로그인해 주세요"); cred = {}; $("#gate").hidden = true; $("#shell").hidden = false; tab = "today"; setData(data); } catch (e) { gate(e.message); } }
 
- 
+/* ---------- 탭 ---------- */
 const LEARNER_TABS = [['training','도제훈련'],['ojtcalendar','OJT 시간표'],['attendance','훈련 출결'],['units','능력단위']];
 let learnerTab = LEARNER_TABS.some(([k]) => k === lsGet('dj.learnerTab')) ? lsGet('dj.learnerTab') : 'training';
 function isLearnerTab(k){ return LEARNER_TABS.some(([key]) => key === k); }
@@ -676,7 +697,7 @@ $("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-ta
 document.querySelector("#shell .bar-top").addEventListener("click", e => { if (e.target.closest("[data-home]")) { boardOpen = null; go("today",{top:true}); } });
 document.querySelector("#shell .bar-top").addEventListener("keydown", e => { if (e.target.closest("[data-home]") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); boardOpen = null; go("today",{top:true}); } });
 
- 
+/* ---------- 통합 검색: 전체 데이터 직렬화·개인정보·인증정보 저장 금지 ---------- */
 const searchDialog=$("#globalSearch"),searchInput=$("#searchInput");
 let searchRows=[],searchReturn=null;
 const searchNorm=v=>String(v||"").normalize("NFKC").toLocaleLowerCase().replace(/\s+/g,"");
@@ -1123,7 +1144,7 @@ function vToday(){
   const soon = sortEv(visibleEvents.filter(e => e.date > TODAY && e.date <= addDays(TODAY, 14)));
   const notices = D.notices.filter(n=>!n.due||n.due>=TODAY).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0, 3);
   const sub = isGuest() ? "로그인 없이 보는 중 · 전체 공개 공지·급식·학교 일정만 보입니다." : T() ? "오늘 일정과 최근 공지입니다." : `${esc(D.me.name)} · ${esc(GROUP[myGroup()] || "")}에 해당하는 일정과 공지만 보여 줍니다.`;
-  let h = `<div class="sec-h"><div><h2>${fmtMD(TODAY)} 오늘</h2><p>${sub}</p></div><div class="row">${isGuest()?'<button class="btn sm pri" data-login>로그인</button>':""}${!isGuest()&&!T()?'<button class="btn sm pri" data-intro-entry>자기소개서 제출</button>':""}${canMyHome()?'<button class="btn sm" data-myhome-edit>화면 꾸미기</button>':""}<button class="btn sm" data-projsub="tools">무료 도구</button><button class="btn sm ghost" data-reload>새로고침</button></div></div>`;
+  let h = `<div class="sec-h"><div><h2>${fmtMD(TODAY)} 오늘</h2><p>${sub}</p></div><div class="row">${isGuest()?'<button class="btn sm pri" data-login>로그인</button>':""}${!isGuest()&&!T()?'<button class="btn sm pri" data-intro-entry>자기소개서 파일 제출</button>':""}${canMyHome()?'<button class="btn sm" data-myhome-edit>화면 꾸미기</button>':""}<button class="btn sm" data-projsub="tools">무료 도구</button><button class="btn sm ghost" data-reload>새로고침</button></div></div>`;
   const cards={
     todo:()=>todayTodo(),
     notices:()=>`<section class="panel"><div class="pad row" style="padding-bottom:0"><span class="label">최근 공지</span><span class="spacer"></span>${isGuest()?"":'<button class="btn sm ghost" data-go="notices">전체 보기</button>'}</div>${notices.length ? notices.map(todayNoticeRow).join("") : emptyBox("아직 공지가 없습니다")}</section>`,
@@ -1138,7 +1159,7 @@ function vToday(){
   if (D.tabsMissing && D.tabsMissing.length && T()) h += `<div class="banner">시트에서 ‘${esc(D.tabsMissing.join("’, ‘"))}’ 탭을 찾지 못했습니다. Code.gs 위쪽의 탭 이름을 확인하세요.</div>`;
   if (T()&&!D.homeOnly){
     const rq = D.requests.filter(r => r.unreadTeacher).length, nopin = D.roster.filter(r => !r.pin).length;
-    if (nopin && !D.loginDisabled) h += `<div class="banner row"><span>PIN이 없는 학생 ${nopin}명은 아직 들어올 수 없습니다.</span><span class="spacer"></span><button class="btn sm" data-go="roster">명단</button></div>`;
+    if (nopin && !D.loginDisabled && !D.studentLoginRequired) h += `<div class="banner row"><span>PIN이 없는 학생 ${nopin}명은 아직 들어올 수 없습니다.</span><span class="spacer"></span><button class="btn sm" data-go="roster">명단</button></div>`;
     const c = g => D.roster.filter(r => r.group === g).length;
     h += `<div class="stats"><div class="stat"><div class="v">${c("learner")}</div><div class="k">학습근로자</div></div>
       <div class="stat"><div class="v">${c("pre2")}<span class="muted" style="font-size:14px"> / ${c("pre1")}</span></div><div class="k">예비 2학년 / 1학년</div></div>
@@ -1157,12 +1178,13 @@ const NOTICE_CATEGORIES=['일반 안내','프로젝트·설계','행사·견학'
 let noticeFilter='all',noticeQuery='',noticeOpen=null;
 const noticeImages=new Map(),noticeImagesPending=new Map();let noticeObserver=null;
 const noticeRelationAvailable=n=>n.relation&&(n.relation.startsWith('cert:')||(n.relation.startsWith('project:')&&(D.projects||[]).some(p=>'project:'+p.id===n.relation))||(n.relation.startsWith('contest:')&&(D.boardPosts||[]).some(p=>'contest:'+p.id===n.relation)));
+function introNoticeBody(n){return (n.links||[]).some(link=>/#intro$/.test(link))?'양식을 내려받아 작성한 파일을 제출하세요. 제출 목록에서 로그인한 학생과 선생님이 HTML로 확인할 수 있습니다.':n.body;}
 function noticeExtras(n){
  const files=n.files||[],images=files.filter(f=>/^image\/(png|jpeg|gif|webp|heic)$/.test(f.mime));
  return '<div class="row" style="margin:8px 0"><span class="chip">'+esc(n.category||'일반 안내')+'</span>'+(n.subject?'<span class="ev-s">'+esc(n.subject)+'</span>':'')+(noticeRelationAvailable(n)?'<button class="btn sm ghost" data-notice-related="'+esc(n.id)+'">'+esc(n.relationLabel)+'에서 보기</button>':n.relationLabel?'<span class="ev-s">'+esc(n.relationLabel)+'</span>':'')+'</div>'
  +(n.eventDate?'<div class="row" style="margin:8px 0"><span class="ev-s">일정 '+esc(n.eventDate)+(n.eventEnd&&n.eventEnd!==n.eventDate?' ~ '+esc(n.eventEnd):'')+(n.place?' · '+esc(n.place):'')+'</span><button class="btn sm" data-notice-calendar="'+esc(n.id)+'">달력 보기</button></div>':'')
  +(images.length?'<div class="notice-gallery">'+images.map(f=>'<button type="button" class="notice-photo" data-notice-photo="'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기"><img data-notice-img="'+esc(f.id)+'" alt="'+esc(f.name)+'" hidden><span class="ev-s" data-notice-img-status>사진 불러오는 중…</span></button>').join('')+'</div>':'')
- +((n.links||[]).length?'<div class="row" style="margin:10px 0">'+n.links.map((link,i)=>/#intro$/.test(link)?'<button class="btn pri" data-intro-entry>자기소개서 제출</button>':'<a class="btn sm" href="'+esc(safeUrl(link))+'" target="_blank" rel="noopener noreferrer">관련 링크 '+(i+1)+' ↗</a>').join('')+'</div>':'')
+ +((n.links||[]).length?'<div class="row" style="margin:10px 0">'+n.links.map((link,i)=>/#intro$/.test(link)?'<button class="btn pri" data-intro-entry>자기소개서 파일 제출</button>':'<a class="btn sm" href="'+esc(safeUrl(link))+'" target="_blank" rel="noopener noreferrer">관련 링크 '+(i+1)+' ↗</a>').join('')+'</div>':'')
  +(files.length?'<div class="notice-attachments">'+files.map(f=>'<div class="row"><span style="flex:1;min-width:0;overflow-wrap:anywhere">'+esc(f.name)+' <span class="ev-s">'+fmtSize(f.size)+'</span></span><button class="btn sm" data-notice-file="'+esc(f.id)+'">원본 받기</button>' + documentPreviewButton(f,'notice') + '</div>').join('')+'</div>':'');
 }
 function relatedNotices(relation,label){
@@ -1192,7 +1214,7 @@ function noticeDlg(n={}){
  openDlg(n.id?'공지·전달 자료 수정':'공지·전달 자료 올리기',
  '<p class="ev-s">카톡 내용을 아래에 붙여넣고, 사진은 Ctrl+V 또는 끌어놓기로 추가하세요. 일정은 날짜를 확인해 직접 입력합니다.</p>'
  +'<div class="fgrid">'+sel('분류','category',NOTICE_CATEGORIES.map(s=>[s,s]),n.category||'일반 안내')+targetSel(n.target)+'</div>'
- +field('제목','title',n.title||'','text','required maxlength="120" id="f-title"')+area('전달 내용·안내','body',n.body||'',5000).replace('<textarea ','<textarea id="f-body" placeholder="카톡에서 복사한 내용을 붙여넣으세요" ')
+ +field('제목','title',n.title||'','text','required maxlength="120" id="f-title"')+area('전달 내용·안내','body',introNoticeBody(n)||'',5000).replace('<textarea ','<textarea id="f-body" placeholder="카톡에서 복사한 내용을 붙여넣으세요" ')
  +'<div class="fgrid">'+sel('관련 프로젝트·자격증·대회','relation',noticeRelatedOptions(n),n.relation||'')+field('주제 (선택)','subject',n.subject||'','text','maxlength="100" placeholder="예: 스마트팜, 실기 준비, 박람회"')+'</div>'
  +area('관련 링크 (한 줄에 하나, 최대 8개)','linksText',(n.links||[]).join('\n'),8000)+'<button type="button" class="btn sm ghost" data-notice-extract-links>본문에서 링크 가져오기</button>'
  +'<details '+(n.eventDate?'open':'')+'><summary>일정 달력에도 표시하기</summary><p class="ev-s">행사·시험·제출일 등 날짜가 확실한 경우 입력하세요. 같은 공지가 달력에 연결되며 중복 글은 만들지 않습니다.</p><div class="fgrid">'+field('일정 시작일','eventDate',n.eventDate||'','date')+field('일정 종료일 (여러 날)','eventEnd',n.eventEnd||'','date')+'</div>'+field('장소','place',n.place||'','text','maxlength="150"')+'</details>'
@@ -1228,7 +1250,7 @@ function noticeCard(n){
       foot += `<div class="readers"><b>확인</b> ${seen.length ? seen.map(a => `${esc(a.name)} <span class="num">${esc(a.at.slice(5))}</span>`).join(" · ") : "없음"}<br><b>미확인</b> ${un.length ? esc(un.join(", ")) : "없음"}</div>`; }
   } else foot = isGuest() ? "" : D.myAcks.includes(n.id) ? `<span class="ack-ok">✓ 확인함</span>` : `<div><button class="btn sm pri" data-ack="${esc(n.id)}">확인했어요</button></div>`;
   return `<article class="notice"><div class="row">${n.pinned ? '<span class="chip pin">고정</span>' : ""}${targetChip(n.target)}<span class="meta">${esc(n.at)}${n.due ? ` · 기한 ${esc(fmtMD(n.due))}` : ""}</span></div>
-    <h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${n.body ? `<div class="body">${esc(n.body)}</div>` : ""}${noticeExtras(n)}${foot}</article>`;
+    <h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeExtras(n)}${foot}</article>`;
 }
 function vNotices(){
  if(noticeOpen){const n=D.notices.find(n=>n.id===noticeOpen);if(n)return '<div class="row" style="margin-bottom:12px"><button class="btn ghost" data-notice-back>‹ 공지 목록으로</button></div><section class="panel">'+noticeCard(n)+'</section>';noticeOpen=null;}
@@ -1378,7 +1400,6 @@ function vCompany(){
  let h=head+(D.companySourceError?'<div class="banner">기업정보 시트를 읽지 못했습니다: '+esc(D.companySourceError)+'</div>':'');
  if(T()&&r.sheetUrl)h+='<div class="row" style="margin-bottom:12px"><button class="btn sm" data-company-seed>기존 기업 목록 가져오기</button><button class="btn sm ghost" data-company-refresh>시트 새로 읽기</button><span class="ev-s">관리 시트의 학생공개 1인 내용만 학생에게 표시됩니다.</span></div>';
  if(c)return h+vCompanyDetail(c);
- h+='<section class="panel pad row"><div style="flex:1"><b>기업 참여·훈련 안내</b><p class="ev-s">참여 절차와 운영 방식, 훈련 일정과 신청 서류</p></div><a class="btn" href="https:\/\/gahs-apprenticeship-guide.workspace-583703.chatgpt.site/" target="_blank" rel="noopener">안내 페이지 열기</a></section>';
  const list=(D.companyInfo||[]).slice().sort((a,b)=>(b.learners-a.learners)||a.name.localeCompare(b.name,'ko'));
  return h+(list.length?'<div class="grid2">'+list.map(c=>'<section class="panel pad"><div class="row">'+(c.industry?'<span class="chip">'+esc(c.industry)+'</span>':'')+(c.learners?'<span class="chip ok">학습근로자 '+c.learners+'명</span>':'')+(T()&&!c.open?'<span class="chip bad">학생 비공개</span>':'')+'</div><h3>'+esc(c.name)+'</h3><p class="ev-s">'+esc(c.address||'근무지 안내 준비 중')+'</p><div class="body">'+esc((c.intro||c.jobs||'').slice(0,200))+'</div><button class="btn pri" data-company-open="'+esc(c.id)+'">기업 자세히 보기</button></section>').join('')+'</div>':emptyBox('등록된 기업이 없습니다','기업 회신을 받아 관리 시트에 입력해 주세요.'));
 }
@@ -1397,29 +1418,39 @@ function companySetupDlg(){const r=D.companyResources||{};openDlg('기업정보 
 let introQuery='',introState='all';
 function introHandouts(){const docs=(D.materials||[]).filter(m=>m.category==='직무체험 준비'&&/사전소개서|사전 소개서/.test(m.title));return docs.length?'<div class="row">'+docs.map(m=>'<button class="btn sm" data-file="'+esc(m.file)+'">'+esc(m.title)+'</button>').join(''):'';}
 function vExperienceIntros(){const list=D.experienceIntros||[],q=introQuery.trim().toLowerCase(),shown=list.filter(i=>(introState==='all'||i.status===introState)&&[i.name,i.companyName,(i.answers||{}).jobInterest].join(' ').toLowerCase().includes(q));
- let h=extraHead(T()?'기업 제출용 자기소개서 관리':'기업 제출용 자기소개서','양식을 받아 작성한 뒤 파일로 제출하세요. 제출본은 본인과 선생님만 확인합니다.',T()&&!D.introAuthRequired?'<button class="btn" data-intro-management>취합 시트 열기</button>':'');
- if(D.introAuthRequired)return h+'<section class="panel pad"><p>로그인 없이 이름과 학년을 입력하고 제출하세요. 제출본은 선생님만 확인합니다.</p><div class="row"><button class="btn pri" data-intro-entry>파일 제출</button><button class="btn" data-intro-template>양식 받기 (Word)</button><button class="btn" data-intro-guide>작성 가이드·예시</button><button class="btn ghost" data-intro-teacher-login>선생님 확인</button></div></section>';
+ let h=extraHead(T()?'기업 제출용 자기소개서 관리':'기업 제출용 자기소개서','양식을 받아 작성한 파일을 제출하세요. 제출 목록은 학생도 볼 수 있고, 제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다.',T()&&!D.introAuthRequired?'<button class="btn" data-intro-management>취합 시트 열기</button>':'');
+ h+='<section class="panel pad"><button class="btn" data-intro-list>제출 목록 보기</button></section>';
+ if(D.introAuthRequired)return h+'<section class="panel pad"><p>로그인 없이 이름과 학년을 입력하고 제출하세요. 제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다.</p><div class="row"><button class="btn pri" data-intro-entry>파일 제출</button><button class="btn" data-intro-template>양식 받기 (Word)</button><button class="btn" data-intro-guide>작성 가이드·예시</button><button class="btn ghost" data-intro-teacher-login>선생님 확인</button></div></section>';
  if(!T())h+='<section class="panel pad"><div class="row"><button class="btn" data-intro-template>양식 받기 (Word)</button><button class="btn" data-intro-guide>작성 가이드·예시</button><button class="btn" data-intro-upload>파일 제출</button></div></section>';
  if(T()){const names=new Set(list.map(i=>i.name)),missing=(D.roster||[]).filter(r=>['pre1','pre2'].includes(r.group)&&!names.has(r.name));h+='<section class="panel pad"><div class="row"><span class="chip">제출 '+list.length+'건</span><span class="chip">확인 '+list.filter(i=>i.status==='확인').length+'건</span><span class="chip">미제출 예비학생 '+missing.length+'명</span><button class="btn sm" data-intro-print-all>확인본 모아 인쇄/PDF</button></div><details><summary>미제출 학생 확인</summary><p>'+esc(missing.map(r=>r.name).join(' · ')||'없음')+'</p></details><p class="ev-s">취합 시트는 교사 전용입니다. 기업에는 필요한 학생의 확인본만 전달하고, 제공 범위와 필요한 안내·동의를 먼저 확인하세요. 학생 보완 의견은 기업 전달본에서 제외합니다.</p><div class="fgrid"><label class="fld"><span>이름·기업·희망 직무 검색</span><input id="introQuery" value="'+esc(introQuery)+'"></label>'+sel('상태','introState',[['all','전체'],['제출','제출'],['보완요청','보완요청'],['확인','확인']],introState)+'</div></section>';}
- return h+(shown.length?shown.map(i=>'<section class="panel pad"><div class="row"><span class="chip">'+esc(i.status)+'</span><b>'+esc(T()?i.name:'나의 자기소개')+'</b><span class="ev-s">'+esc(i.company?i.companyName:'기업 미정')+' · '+esc(i.updated)+'</span></div><h3>'+esc((i.answers||{}).headline||(i.file?'파일로 제출한 자기소개서':'작성 중인 자기소개'))+'</h3><details><summary>작성 내용 보기</summary>'+companyLines(Object.entries(INTRO_FIELDS).map(([k,[l]])=>[l,(i.answers||{})[k]]))+'</details>'+(i.feedback?'<p class="banner">학생 보완 의견: '+esc(i.feedback)+'</p>':'')+(i.teacherNote?'<p>기업 전달용 교사 의견: '+esc(i.teacherNote)+'</p>':'')+'<div class="row"><button class="btn" '+(T()?'data-intro-review':'data-intro-upload')+'="'+esc(i.id)+'">'+(T()?'검토·의견 남기기':'파일 다시 제출')+'</button>'+(T()&&i.status==='확인'&&(i.answers||{}).headline?'<button class="btn" data-intro-print="'+esc(i.id)+'">기업 전달본 인쇄/PDF</button>':'')+(i.file?'<p>'+extraFile(i.file)+'</p>':'')+'</div></section>').join(''):emptyBox(T()?'조건에 맞는 제출본이 없습니다':'저장한 자기소개가 없습니다'));
+ return h+(shown.length?shown.map(i=>'<section class="panel pad"><div class="row"><span class="chip">'+esc(i.status)+'</span><b>'+esc(T()?i.name:'나의 자기소개')+'</b><span class="ev-s">'+esc(i.company?i.companyName:'기업 미정')+' · '+esc(i.updated)+'</span></div><h3>'+esc((i.answers||{}).headline||(i.file?'파일로 제출한 자기소개서':'작성 중인 자기소개'))+'</h3><details><summary>작성 내용 보기</summary>'+companyLines(Object.entries(INTRO_FIELDS).map(([k,[l]])=>[l,(i.answers||{})[k]]))+'</details>'+(i.feedback?'<p class="banner">학생 보완 의견: '+esc(i.feedback)+'</p>':'')+(i.teacherNote?'<p>기업 전달용 교사 의견: '+esc(i.teacherNote)+'</p>':'')+'<div class="row"><button class="btn" '+(T()?'data-intro-review':'data-intro-upload')+'="'+esc(i.id)+'">'+(T()?'검토·의견 남기기':'파일 다시 제출')+'</button>'+(T()&&i.status==='확인'&&(i.answers||{}).headline?'<button class="btn" data-intro-print="'+esc(i.id)+'">기업 전달본 인쇄/PDF</button>':'')+(T()&&/\.docx$/i.test(i.fileName||'')?'<button class="btn pri" data-intro-document="'+esc(i.id)+'">Word를 HTML로 보기</button>':'')+(i.file?'<p>'+extraFile(i.file)+'</p>':'')+'</div></section>').join(''):emptyBox(T()?'조건에 맞는 제출본이 없습니다':'저장한 자기소개가 없습니다'));
 }
-function ownIntro(){return (D.experienceIntros||[]).find(i=>!i.company)||(D.experienceIntros||[])[0]||{};}
-function introLogin(){introDeepPending=true;lsSet('dj.mode','teacher');gate('제출본을 확인하려면 선생님으로 로그인하세요.');}
+function introLogin(teacher=false){introDeepPending=true;lsSet('dj.mode',teacher?'teacher':'student');gate(teacher?'제출본을 확인하려면 선생님으로 로그인하세요.':'학생 이름과 PIN으로 들어오면 파일을 제출할 수 있습니다.');}
 async function openIntroEntry(){if(isGuest()||D.loginDisabled||D.introAuthRequired)return publicIntroEntry();await hydrateFullData();go('intro');}
 
+async function introDocumentDlg(id){
+ openDlg('자기소개서 HTML 보기','<p data-intro-document-status role="status">자기소개서를 읽는 중…</p><div data-intro-document-content></div>','닫기',()=>true);dlg.classList.add('intro-word-preview');const box=form.querySelector('[data-intro-document-content]'),status=form.querySelector('[data-intro-document-status]'),entry=(D.experienceIntros||[]).find(i=>i.id===id);let url;if(T()&&entry&&entry.file){const original=document.createElement('button');original.type='button';original.className='btn';original.textContent='원본 받기';original.onclick=()=>downloadExtra(entry.file);form.querySelector('.dlg-act').prepend(original);}
+ const cleanup=()=>{dlg.classList.remove('intro-word-preview');if(url)URL.revokeObjectURL(url);};dlg.addEventListener('close',cleanup,{once:true});
+ try{const r=await call('introDocument',{id});if(!box.isConnected||!dlg.open)return;const frame=document.createElement('iframe');frame.title=r.name+' HTML 보기';frame.setAttribute('sandbox','');frame.setAttribute('referrerpolicy','no-referrer');frame.srcdoc=r.html;box.appendChild(frame);status.textContent=r.name+' · 제출한 자기소개서 HTML 보기입니다.';url=URL.createObjectURL(new Blob([r.html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.className='btn';a.href=url;a.download=r.name.replace(/\.docx$/i,'')+'.html';a.textContent='HTML 저장';form.querySelector('.dlg-act').prepend(a);}catch(e){if(status.isConnected)status.textContent=e.message;}
+}
+function introSubmissionListBox(){return '<section class="panel pad"><h3>제출 목록</h3><p class="ev-s">로그인한 학생과 선생님은 이전 온라인 작성본과 Word 제출본을 HTML로 볼 수 있습니다.</p><div data-intro-submission-list role="status">목록을 불러오는 중…</div></section>';}
+async function loadIntroSubmissionList(){const box=form.querySelector('[data-intro-submission-list]');if(!box)return;try{const list=await call('introSubmissionList',{},D&&!D.introAuthRequired?cred:{});if(!box.isConnected)return;box.innerHTML=list.length?'<p>제출 '+list.length+'명</p><div class="tablewrap"><table><thead><tr><th>이름</th><th>학년</th><th>제출 여부</th></tr></thead><tbody>'+list.map(i=>'<tr><td>'+esc(i.name)+'</td><td>'+esc(i.grade)+'</td><td>'+esc(i.status)+(i.documents||[]).map(d=>'<br><button class="btn sm" type="button" data-intro-shared="'+esc(d.id)+'">'+esc(d.label)+'</button>').join('')+'</td></tr>').join('')+'</tbody></table></div>':'아직 제출한 학생이 없습니다.';}catch(e){if(box.isConnected)box.textContent='목록을 불러오지 못했습니다. 닫고 다시 열어 주세요.';}}
+$('#dlgForm').addEventListener('click',e=>{const b=e.target.closest('[data-intro-shared]');if(!b)return;const id=b.dataset.introShared;dlg.addEventListener('close',()=>introDocumentDlg(id),{once:true});dlg.close();});
+function introSubmissionListDlg(){openDlg('자기소개서 제출 목록',introSubmissionListBox(),'닫기',()=>true);loadIntroSubmissionList();}
 function publicIntroEntry(){
- openDlg('기업 제출용 자기소개서','<p>로그인 없이 제출할 수 있습니다. 이름과 학년을 정확히 입력해 주세요.</p><div class="row"><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroGuide">작성 가이드·예시</button><button type="button" class="btn" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출본은 선생님만 확인합니다. 제출 후 수정이 필요하면 선생님께 말씀해 주세요.</p>','닫기',()=>true);
- $('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroGuide').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(introGuideDlg),{once:true});dlg.close();};$('#publicIntroFile').onclick=()=>{dlg.close();publicIntroDlg();};
+ if(D&&isGuest()&&D.studentLoginRequired){openDlg('자기소개서 파일 제출','<p>파일 제출과 학생 제출본 HTML 보기는 학생 이름으로 로그인한 뒤 이용해 주세요.</p><button class="btn pri" id="introGuestLogin" type="button">학생 로그인</button>','닫기',()=>true);$('#introGuestLogin').onclick=()=>{dlg.close();introLogin();};return;}
+ openDlg('기업 제출용 자기소개서','<p>양식을 받아 작성한 파일을 제출해 주세요. 로그인 없이 제출할 수 있습니다.</p><div class="row"><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroGuide">작성 가이드·예시</button><button type="button" class="btn pri" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다. 제출 후 수정이 필요하면 선생님께 말씀해 주세요.</p>'+introSubmissionListBox(),'닫기',()=>true);
+ $('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroGuide').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(introGuideDlg),{once:true});dlg.close();};$('#publicIntroFile').onclick=()=>{dlg.close();publicIntroDlg();};loadIntroSubmissionList();
 }
 function publicIntroDlg(){
  const submissionKey=crypto.randomUUID();let sent=false,dirty=false;
- const identity=field('이름','publicName','','text','required maxlength="40" autocomplete="name"')+sel('학년','publicGrade',[['','선택'],['1','1학년'],['2','2학년'],['3','3학년']],'');
- openDlg('자기소개서 파일 제출',identity+'<p>문서·PDF·엑셀·사진 한 개, 8MB 이하</p>'+filePicker(1).replace('파일당 '+MAX_MB+'MB','파일당 8MB')+'<p class="ev-s">제출본은 선생님만 확인합니다.</p><p id="publicIntroState" role="status"></p>','제출',async()=>{
- try{const f=draftFiles[0];if(!f)throw Error('파일을 선택해 주세요');if(f.size>8*1024*1024)throw Error('파일을 8MB 이하로 줄여 주세요');const payload={name:form.elements.publicName.value,grade:form.elements.publicGrade.value,submissionKey,confirm:true,mode:'file',upload:{name:f.name,base64:await blobB64(f)}};await call('submitPublicIntro',payload,{});sent=true;toast('제출했습니다. 선생님이 확인합니다.');return true;}catch(e){$('#publicIntroState').textContent=e.message+' 선택한 파일은 그대로 있습니다. 다시 제출해 주세요.';return false;}
+ const bound=!!(D&&D.me&&D.me.studentId),identity=bound?'<p>제출자: '+esc(D.me.name)+' · '+esc(D.me.klass)+'</p>':field('이름','publicName','','text','required maxlength="40" autocomplete="name"')+sel('학년','publicGrade',[['','선택'],['1','1학년'],['2','2학년'],['3','3학년']],'');
+ openDlg('자기소개서 파일 제출',identity+'<p>문서·PDF·엑셀·사진 한 개, 8MB 이하</p>'+filePicker(1).replace('파일당 '+MAX_MB+'MB','파일당 8MB')+'<p class="ev-s">제출 목록에 이름·학년·제출 여부가 표시됩니다. 제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다.</p><p id="publicIntroState" role="status"></p>','제출',async()=>{
+ try{const f=draftFiles[0];if(!f)throw Error('파일을 선택해 주세요');if(f.size>8*1024*1024)throw Error('파일을 8MB 이하로 줄여 주세요');await call('submitPublicIntro',{name:bound?D.me.name:form.elements.publicName.value,grade:bound?D.me.studentId[0]:form.elements.publicGrade.value,submissionKey,confirm:true,mode:'file',upload:{name:f.name,base64:await blobB64(f)}},bound?cred:{});sent=true;toast('파일을 제출했습니다. 선생님이 확인합니다.');return true;}catch(e){$('#publicIntroState').textContent=e.message+' 입력한 내용과 선택한 파일은 그대로 있습니다. 다시 제출해 주세요.';return false;}
  });
  const change=()=>{dirty=true;},unload=e=>{if(dirty&&!sent&&dlg.open){e.preventDefault();e.returnValue='';}};form.addEventListener('input',change);window.addEventListener('beforeunload',unload);dlg.addEventListener('close',()=>{form.removeEventListener('input',change);window.removeEventListener('beforeunload',unload);},{once:true});
 }
-function introUploadDlg(i=ownIntro()){openDlg('자기소개서 파일 제출','<p>작성한 파일 한 개를 골라 제출하세요. Word·한글·PDF·엑셀·사진, 8MB 이하</p>'+filePicker(1).replace('파일당 '+MAX_MB+'MB','파일당 8MB'),'파일 제출',async()=>{try{const f=draftFiles[0];if(!f)throw Error('파일을 선택해 주세요');if(f.size>8*1024*1024)throw Error('파일을 8MB 이하로 줄여 주세요');const upload={name:f.name,base64:await blobB64(f)};return await act('saveExperienceIntro',{id:i.id,company:i.company||'',mode:'file',status:'제출',confirm:true,upload},'파일을 제출했습니다');}catch(e){toast(e.message);return false;}});}
+function introUploadDlg(){return publicIntroDlg();}
 const INTRO_GUIDE_RULES=[['첫 문장은 \'이런 일을 해 본 사람\'','성격 형용사 대신 내가 한 행동으로 소개합니다.','저는 성실하고 책임감 있는 학생입니다.','스마트팜 급수 장치를 만들며 납땜 불량을 찾아 고치는 법을 익힌 2학년입니다.'],['숫자를 하나 이상','몇 개, 몇 시간, 몇 번, 얼마나 줄었는지가 있으면 글이 믿을 만해집니다.','센서 문제를 열심히 해결했습니다.','배선 12곳을 다시 납땜해 오작동을 주 3회에서 0회로 줄였습니다.'],['경험은 4줄: 상황 → 내가 한 일 → 결과 → 배운 점','팀 작업이면 \'우리\'가 아니라 \'내가\' 맡은 부분을 씁니다.','우리 팀은 로봇팔을 만들어 대회에 나갔습니다.','로봇팔 대회에서 저는 그리퍼 서보 배선과 전원 분배를 맡아 과열 문제를 해결했습니다.'],['그 회사에 맞추기','알림판 \'기업정보\'에서 그 회사 제품이나 공정을 하나 찾아 내 경험과 연결합니다.','좋은 회사라서 지원했습니다.','SMT 라인의 자동 검사 장비가 불량을 어떻게 찾는지 직접 보고 싶습니다.'],['태도는 사례로 증명','기업은 시간 지키기, 안전 장비, 정리정돈, 보고를 실제로 봅니다. 한 가지를 사례로 씁니다.','시간 약속을 잘 지킵니다.','OJT 기간 출근 시간 10분 전 도착을 한 번도 놓치지 않았습니다.'],['작품 사진 한 장, 마지막은 질문 하나','만든 것을 찍은 사진 1장이 글 열 줄보다 낫습니다. 끝에는 직무체험 때 묻고 싶은 구체적인 질문을 씁니다. 관심이 진짜라는 신호가 됩니다.','','']];
 function introGuideHtml(){
  return '<div class="ig"><header class="ig-top"><span class="ig-tag">로봇자동화과 · 예비도제 기업 직무체험</span><h3>기업이 30초 안에 읽는 자기소개서</h3><p class="ig-lead">기업 담당자는 첫 문장, 숫자, 사진을 먼저 봅니다. 아래 예시처럼 쓰면 Word 양식 한 장으로도 눈에 띄는 소개서가 됩니다. 항목마다 2~4문장, A4 1쪽이면 충분합니다.</p><span class="ig-ex">예시 학생 · 실제 학생 정보 아님</span></header>'
@@ -1454,7 +1485,7 @@ function printIntroPages(items){
 $('#main').addEventListener('input',e=>{if(e.target.id!=='introQuery')return;introQuery=e.target.value;const pos=e.target.selectionStart;render();const el=$('#introQuery');el.focus();el.setSelectionRange(pos,pos);});
 $('#main').addEventListener('change',e=>{if(e.target.name==='introState'){introState=e.target.value;render();}});
 $('#main').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const x=b.dataset;if(x.introManagement!==undefined){b.disabled=true;try{const r=await call('introManagement');openDlg('교사 전용 취합 시트','<p>제출본 '+r.submitted+'건 · 확인본 '+r.confirmed+'건을 동기화했습니다. 학생이 제출·재제출하거나 교사가 검토하면 자동 갱신됩니다.</p><p>이 시트는 취합용 자동 보기입니다. 내용 수정은 알림판에서 진행하고, 기업에는 필요한 학생의 확인본만 인쇄/PDF로 전달하세요.</p><a class="btn" href="'+esc(r.url)+'" target="_blank" rel="noopener">제출관리 시트 열기</a>','닫기',()=>true);}catch(err){toast(err.message);}finally{b.disabled=false;}return;}if(x.introPrint)return printIntroPages((D.experienceIntros||[]).filter(i=>i.id===x.introPrint));if(x.introPrintAll!==undefined)return printIntroPages((D.experienceIntros||[]).filter(i=>(introState==='all'||i.status===introState)&&[i.name,i.companyName,(i.answers||{}).jobInterest].join(' ').toLowerCase().includes(introQuery.toLowerCase())));});
-$('#main').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const x=b.dataset;if(x.introEntry!==undefined)return openIntroEntry();if(x.introTeacherLogin!==undefined)return introLogin();if(x.introTemplate!==undefined)return introTemplateDownload();if(x.introGuide!==undefined)return introGuideDlg();if(x.introUpload!==undefined)return introUploadDlg((D.experienceIntros||[]).find(i=>i.id===x.introUpload)||ownIntro());if(x.companySub){companySub=x.companySub;return x.companySub==='intro'?go('intro'):go('company');}if(x.companyOpen){companySub='info';companySelected=x.companyOpen;return go('company');}if(x.companyBack!==undefined){companySelected='';return render();}if(x.companySetup!==undefined)return companySetupDlg();if(x.companySeed!==undefined)return act('seedCompanySource',{},'기존 기업 목록을 가져왔습니다');if(x.companyRefresh!==undefined)return act('refreshCompanyInfo',{},'기업정보 시트를 새로 읽었습니다');if(x.companyFolder){drvStale();return act('createCompanyFolder',{id:x.companyFolder},'기업 자료실을 만들었습니다');}if(x.companyEvent){const ev=(D.companyEvents||[]).find(e=>e.id===x.companyEvent);if(ev){calSel=ev.date;calMonth=parse(ev.date);calMonth.setDate(1);schedMode='cal';go('schedule');}return;}if(x.introReview){const i=(D.experienceIntros||[]).find(i=>i.id===x.introReview);if(i)return openDlg(i.name+' 자기소개 검토',sel('검토 결과','status',[['확인','확인'],['보완요청','보완요청']],i.status==='보완요청'?'보완요청':'확인')+area('학생 보완 의견 기업전달 제외','feedback',i.feedback||'',2000)+area('기업 전달용 학교 담당자 의견','teacherNote',i.teacherNote||'',700),'저장',fd=>act('reviewExperienceIntro',{id:i.id,...fd},'검토 의견을 저장했습니다'));}});
+$('#main').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const x=b.dataset;if(x.introDocument)return introDocumentDlg(x.introDocument);if(x.introList!==undefined)return introSubmissionListDlg();if(x.introEntry!==undefined)return openIntroEntry();if(x.introStudentLogin!==undefined)return introLogin();if(x.introTeacherLogin!==undefined)return introLogin(true);if(x.introTemplate!==undefined)return introTemplateDownload();if(x.introGuide!==undefined)return introGuideDlg();if(x.introUpload!==undefined)return introUploadDlg();if(x.companySub){companySub=x.companySub;return x.companySub==='intro'?go('intro'):go('company');}if(x.companyOpen){companySub='info';companySelected=x.companyOpen;return go('company');}if(x.companyBack!==undefined){companySelected='';return render();}if(x.companySetup!==undefined)return companySetupDlg();if(x.companySeed!==undefined)return act('seedCompanySource',{},'기존 기업 목록을 가져왔습니다');if(x.companyRefresh!==undefined)return act('refreshCompanyInfo',{},'기업정보 시트를 새로 읽었습니다');if(x.companyFolder){drvStale();return act('createCompanyFolder',{id:x.companyFolder},'기업 자료실을 만들었습니다');}if(x.companyEvent){const ev=(D.companyEvents||[]).find(e=>e.id===x.companyEvent);if(ev){calSel=ev.date;calMonth=parse(ev.date);calMonth.setDate(1);schedMode='cal';go('schedule');}return;}if(x.introReview){const i=(D.experienceIntros||[]).find(i=>i.id===x.introReview);if(i)return openDlg(i.name+' 자기소개 검토',sel('검토 결과','status',[['확인','확인'],['보완요청','보완요청']],i.status==='보완요청'?'보완요청':'확인')+area('학생 보완 의견 기업전달 제외','feedback',i.feedback||'',2000)+area('기업 전달용 학교 담당자 의견','teacherNote',i.teacherNote||'',700),'저장',fd=>act('reviewExperienceIntro',{id:i.id,...fd},'검토 의견을 저장했습니다'));}});
 
 function companyDlg(c = {}){
   openDlg(c.id ? "훈련 기업 수정" : "훈련 기업 등록", field("기업명", "name", c.name || "", "text", 'required maxlength="80"') + field("주소", "address", c.address || "", "text", 'maxlength="200"') +
@@ -1658,7 +1689,7 @@ $('#main').addEventListener('click',e=>{
  
 function vMeOriginal(){
   return `<div class="sec-h"><div><h2>${T() ? "설정" : "내 정보"}</h2></div></div><section class="panel">
-    <div class="pad" style="display:flex;flex-direction:column;gap:6px">${T() ? `<b>선생님으로 들어와 있습니다</b>` : `<b>${esc(D.me.name)}</b><span class="ev-s">${esc(GROUP[myGroup()] || "")}${D.me.klass ? ` · ${esc(D.me.klass)}` : ""}</span>`}</div>
+    <div class="pad" style="display:flex;flex-direction:column;gap:6px">${T() ? `<b>${esc(D.me.name)} · ${A()?"최고관리자":"교사"}</b>` : `<b>${esc(D.me.name)}</b><span class="ev-s">${esc(GROUP[myGroup()] || "")}${D.me.klass ? ` · ${esc(D.me.klass)}` : ""}</span>`}</div>
     <div class="pad row" style="border-top:1px solid var(--line)"><span>홈 화면에 추가하면 앱처럼 바로 열 수 있습니다. 안드로이드: 크롬 ⋮ → 홈 화면에 추가 · 아이폰: 사파리 공유 □↑ → 홈 화면에 추가</span></div>
     ${D.loginDisabled ? "" : `<div class="pad row" style="border-top:1px solid var(--line)"><span class="spacer"></span><button class="btn" data-logout>나가기</button></div>`}</section>`;
 }
@@ -1901,13 +1932,14 @@ let documentPreviewUrl=null,documentPreviewTicket=0;
 async function previewDocument(root,id){
  const ticket=++documentPreviewTicket;
  openDlg('문서 바로보기','<p data-document-status>문서를 불러오는 중…</p><div data-document-content></div>','닫기',()=>true);
+ dlg.classList.add('document-preview');
  const content=form.querySelector('[data-document-content]'),status=form.querySelector('[data-document-status]');
  try{
   const parts=[];let off=0,r;
   do{r=await call(root==='notice'?'noticeDownload':root==='file'?'downloadFile':root==='material-file'?'driveMaterialFile':'driveDownload',{root,id,offset:off});if(ticket!==documentPreviewTicket||!content.isConnected||!dlg.open)return;const b=Uint8Array.from(atob(r.base64||''),c=>c.charCodeAt(0));parts.push(b);off+=b.length;if(!b.length&&!r.done)throw Error('문서를 읽지 못했습니다');}while(!r.done&&off<r.size);
   const kind=documentPreviewKind(r);if(!['pdf','image','text'].includes(kind))throw Error('바로보기를 지원하지 않는 형식입니다. 원본 받기를 이용해 주세요.');
   if(kind==='text'){const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:65vh;overflow:auto';pre.textContent=await new Blob(parts).text();if(ticket!==documentPreviewTicket)return;content.appendChild(pre);}
-  else{const mime=kind==='pdf'?'application/pdf':r.mime;documentPreviewUrl=URL.createObjectURL(new Blob(parts,{type:mime}));const view=document.createElement(kind==='pdf'?'object':'img');if(kind==='pdf'){view.data=documentPreviewUrl;view.type='application/pdf';const a=document.createElement('a');a.href=documentPreviewUrl;a.target='_blank';a.rel='noopener';a.textContent='문서 새 창에서 보기';view.appendChild(a);}else view.src=documentPreviewUrl;view.title=r.name;view.setAttribute('data-document-view',kind);view.style.cssText=kind==='pdf'?'width:100%;height:65vh;border:0':'max-width:100%;max-height:65vh;object-fit:contain';if(kind==='image')view.alt=r.name;content.appendChild(view);}
+  else{const mime=kind==='pdf'?'application/pdf':r.mime;documentPreviewUrl=URL.createObjectURL(new Blob(parts,{type:mime}));const view=document.createElement(kind==='pdf'?'object':'img');if(kind==='pdf'){view.data=documentPreviewUrl;view.type='application/pdf';const a=document.createElement('a');a.href=documentPreviewUrl;a.target='_blank';a.rel='noopener';a.className='btn';a.textContent='새 탭에서 크게 보기 ↗';form.querySelector('.dlg-act').prepend(a);view.appendChild(a.cloneNode(true));}else view.src=documentPreviewUrl;view.title=r.name;view.setAttribute('data-document-view',kind);if(kind==='image'){view.style.cssText='max-width:100%;max-height:100%;object-fit:contain';view.alt=r.name;}content.appendChild(view);}
   status.textContent=r.name;
  }catch(e){if(ticket===documentPreviewTicket&&status.isConnected)status.textContent=e.message;}
 }
@@ -2035,9 +2067,10 @@ function lookSection(){
 }
 function vMe(){
   let h=vMeOriginal()+calSubSection();const styleSettings='<details class="panel pad"><summary>화면 꾸미기</summary>'+lookSection()+'</details>';
-  if(!T()){const c=D.contact;return h+`<section class="panel pad"><h3>이메일 알림</h3><p class="ev-s">메일 앱에서 알림을 켜면 휴대폰에서 확인할 수 있습니다. 수신은 선택 사항입니다.</p><div class="ev-s">현재: ${c.enabled?'수신':'수신 안 함'} ${esc(c.email)}</div><button class="btn" data-contact>이메일·수신 설정</button></section>`+styleSettings;}
+  if(!T()){h+=studentAccountPanel();const c=D.contact;return h+`<section class="panel pad"><h3>이메일 알림</h3><p class="ev-s">메일 앱에서 알림을 켜면 휴대폰에서 확인할 수 있습니다. 수신은 선택 사항입니다.</p><div class="ev-s">현재: ${c.enabled?'수신':'수신 안 함'} ${esc(c.email)}</div><button class="btn" data-contact>이메일·수신 설정</button></section>`+styleSettings;}
+  h+=staffAccountPanel();if(A())h+='<section class="panel pad"><h3>접속 설정</h3><p>현재: '+(D.publicAccess?'누구나 자유 접속':'로그인 필수')+'</p><button class="btn" data-public-access>'+(D.publicAccess?'로그인 필수로 잠그기':'누구나 자유 접속 허용')+'</button><p class="ev-s">자유 접속에서는 공개 안내를 볼 수 있습니다. 학생 제출본·파일 제출·교사 업무는 로그인이 필요합니다.</p></section>';if(A())h+='<section class="panel pad"><h3>학생 로그인 계정</h3><p>1~3학년 3반 학생의 이름·학번을 등록합니다. 다른 학생의 업무 기록은 삭제하지 않습니다.</p><button class="btn" data-import-class3>3반 학생 계정 등록</button></section>';
   const s=D.settings;
-  h+=`<section class="panel pad"><h3>연동 설정 (드라이브·캘린더·노션·시간표·이메일)</h3><p class="ev-s">설정을 저장한 다음 동기화·발송을 실행하세요. 자동 실행을 켜면 약 10분 간격으로 처리합니다.</p><div class="ev-s">구글 드라이브: ${s.driveRootUrl?`<a href="${esc(s.driveRootUrl)}" target="_blank" rel="noopener">자료 폴더 열기 ↗</a>${s.driveCustom?'':' (자동 생성)'}`:'첫 파일을 올리면 자동으로 만들어집니다'}<br>캘린더: ${esc(s.calendarId||'미설정')}<br>이메일 알림: ${s.mailEnabled?'사용':'꺼짐'} · 자동 실행: ${s.auto?'사용':'꺼짐'}<br>최근 자동 실행: ${esc(s.lastRun||'없음')}${s.lastError?'<br>실행 오류: '+esc(s.lastError):''}</div><div class="row" style="margin-top:12px"><button class="btn" data-extra-settings>연동 설정 열기</button><button class="btn" data-calendar-create ${s.calendarId?'disabled':''}>전용 캘린더 만들기</button><button class="btn" data-calendar-sync>캘린더 동기화</button><button class="btn" data-mail-send>알림 메일 발송</button><button class="btn" data-auto>${s.auto?'자동 실행 끄기':'자동 실행 켜기'}</button><button class="btn" data-check>첫 실행 점검</button></div></section>`;
+  if(A())h+=`<section class="panel pad"><h3>연동 설정 (드라이브·캘린더·노션·시간표·이메일)</h3><p class="ev-s">설정을 저장한 다음 동기화·발송을 실행하세요. 자동 실행을 켜면 약 10분 간격으로 처리합니다.</p><div class="ev-s">구글 드라이브: ${s.driveRootUrl?`<a href="${esc(s.driveRootUrl)}" target="_blank" rel="noopener">자료 폴더 열기 ↗</a>${s.driveCustom?'':' (자동 생성)'}`:'첫 파일을 올리면 자동으로 만들어집니다'}<br>캘린더: ${esc(s.calendarId||'미설정')}<br>이메일 알림: ${s.mailEnabled?'사용':'꺼짐'} · 자동 실행: ${s.auto?'사용':'꺼짐'}<br>최근 자동 실행: ${esc(s.lastRun||'없음')}${s.lastError?'<br>실행 오류: '+esc(s.lastError):''}</div><div class="row" style="margin-top:12px"><button class="btn" data-extra-settings>연동 설정 열기</button><button class="btn" data-calendar-create ${s.calendarId?'disabled':''}>전용 캘린더 만들기</button><button class="btn" data-calendar-sync>캘린더 동기화</button><button class="btn" data-mail-send>알림 메일 발송</button><button class="btn" data-auto>${s.auto?'자동 실행 끄기':'자동 실행 켜기'}</button><button class="btn" data-check>첫 실행 점검</button></div></section>`;
   h+=`<section class="panel"><div class="pad"><h3>학생 이메일 수신 설정</h3></div>${D.roster.map(r=>{const c=D.contacts.find(c=>c.name===r.name);return `<div class="att"><div class="who"><b>${esc(r.name)}</b><small>${esc(c?.email||'미등록')} · ${c?.enabled?'수신':'수신 안 함'}</small></div><button class="btn sm" data-contact="${esc(r.name)}">수정</button></div>`;}).join('')}</section>`;
   h+=`<section class="panel pad"><details><summary>최근 이메일 발송 기록</summary>${D.mailLog.length?`<div class="tbl-wrap"><table><thead><tr><th>시각</th><th>수신자</th><th>종류</th><th>결과</th></tr></thead><tbody>${[...D.mailLog].reverse().map(x=>`<tr><td>${esc(x.at)}</td><td>${esc(x.name)}</td><td>${esc(x.kind)}</td><td>${esc(x.result)}</td></tr>`).join('')}</tbody></table></div>`:emptyBox('발송 기록이 없습니다')}</details></section>`;return h+styleSettings;
 }
@@ -2200,7 +2233,7 @@ $("#main").addEventListener("click", e => { const b = e.target.closest("[data-lo
   render(); });
 applyLook();
 form.addEventListener("click", e => { const b = e.target.closest("[data-unpick]"); if (b) { draftFiles.splice(Number(b.dataset.unpick), 1); renderDraftFiles(); } });
-dlg.addEventListener("close", () => { dlgDrop = null; documentPreviewTicket++;if(documentPreviewUrl){URL.revokeObjectURL(documentPreviewUrl);documentPreviewUrl=null;} });
+dlg.addEventListener("close", () => { dlg.classList.remove('document-preview');dlgDrop = null; documentPreviewTicket++;if(documentPreviewUrl){URL.revokeObjectURL(documentPreviewUrl);documentPreviewUrl=null;} });
 dlg.addEventListener("paste", e=>{if(!dlg.open||!dlgDrop)return;const files=Array.from(e.clipboardData&&e.clipboardData.files||[]);if(files.length){e.preventDefault();dlgDrop(files.map((f,i)=>f.type.startsWith('image/')?new File([f],'붙여넣기-'+Date.now()+'-'+i+'.'+(f.type.split('/')[1]||'png'),{type:f.type}):f));}});
 form.addEventListener("click",e=>{const b=e.target.closest('[data-notice-original]');if(b)drvDownload('notice',b.dataset.noticeOriginal);if(e.target.closest('[data-notice-extract-links]')){const text=form.querySelector('[name="body"]').value,box=form.querySelector('[name="linksText"]'),found=text.match(/https:[/][/][^\s<>"']+/g)||[];box.value=[...new Set([...box.value.split(/\r?\n/),...found].map(s=>s.trim().replace(/[.,，。)]+$/g,'')).filter(Boolean))].slice(0,8).join('\n');toast(found.length?'본문의 링크를 가져왔습니다':'본문에 https 링크가 없습니다');}});
 const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
@@ -2215,6 +2248,8 @@ document.addEventListener("drop", e => {
   toast("파일은 올리기 창을 연 다음 끌어다 놓아 주세요");
 });
 function openDlg(title, body, label, fn){
+  dlg.classList.remove('intro-word-preview');
+  dlg.classList.remove('document-preview');
   form.innerHTML = `<h3>${esc(title)}</h3>${body}<div class="dlg-act"><button class="btn" type="button" data-close>취소</button><button class="btn pri" type="submit" id="dlgOk">${esc(label)}</button></div>`;
   onSubmit = fn; dlgDrop = null; dlg.showModal(); bindFilePicker(); const f = form.querySelector("input:not([type=file]),textarea,select"); if (f) f.focus();
 }
@@ -2455,11 +2490,11 @@ form.addEventListener("click",e=>{if(!e.target.closest("[data-mh-reset]"))return
 
  
 (async () => {
-  let saved = null; try { saved = JSON.parse(lsGet("dj.cred") || "null"); } catch {}
-  const quick = cachedHome(saved || {});
+  let saved = null; try { saved = JSON.parse(lsGet("dj.cred") || sessionStorage.getItem("dj.session") || "null"); } catch {}
+  const quick = lsGet("dj.login.required")==="true"?null:cachedHome(saved || {});
   if (quick) { cred = saved || {}; $("#gate").hidden = true; $("#shell").hidden = false; setData(Object.assign({}, quick, { fromCache: true })); }
   try { const data = await call("load", {deferLinks:true,homeOnly:true}, saved || {}); cred = saved || {}; $("#gate").hidden = true; $("#shell").hidden = false; if (D && !D.homeOnly && !D.fromCache) return; setData(data); }
-  catch (e) { if(location.hash==='#intro'){introDeepPending=false;$("#startupScreen").hidden=true;publicIntroEntry();return;} if (quick && !/PIN|비밀번호|이름/.test(e.message)) { toast(e.message); return; } lsSet("dj.cred", null); lsSet(HOME_KEY, null); D = null; gate(e.message); }
+  catch (e) { if(location.hash==='#intro'&&!e.loginRequired&&!e.studentLoginRequired){introDeepPending=false;$("#startupScreen").hidden=true;publicIntroEntry();return;} if (quick && !/PIN|비밀번호|이름/.test(e.message)) { toast(e.message); return; } lsSet("dj.cred", null);try{sessionStorage.removeItem("dj.session");}catch{}lsSet(HOME_KEY, null); D = null; gate(e.message); }
 })();
 setInterval(() => { if (D && document.visibilityState === "visible" && !dlg.open) reload(); }, 120000);
 })();
