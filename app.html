@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="184f158">
+<meta name="dj-build" content="9b26008">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2132,10 +2132,30 @@ function vMe(){
   if(!T()){h+=studentAccountPanel();const c=D.contact;return h+`<section class="panel pad"><h3>이메일 알림</h3><p class="ev-s">메일 앱에서 알림을 켜면 휴대폰에서 확인할 수 있습니다. 수신은 선택 사항입니다.</p><div class="ev-s">현재: ${c.enabled?'수신':'수신 안 함'} ${esc(c.email)}</div><button class="btn" data-contact>이메일·수신 설정</button></section>`+styleSettings;}
   h+=staffAccountPanel();if(A())h+='<section class="panel pad"><h3>접속 설정</h3><p>현재: '+(D.publicAccess?'누구나 자유 접속':'로그인 필수')+'</p><button class="btn" data-public-access>'+(D.publicAccess?'로그인 필수로 잠그기':'누구나 자유 접속 허용')+'</button><p class="ev-s">자유 접속에서는 공개 안내를 볼 수 있습니다. 학생 제출본·파일 제출·교사 업무는 로그인이 필요합니다.</p></section>';if(A())h+='<section class="panel pad"><h3>학생 로그인 계정</h3><p>1~3학년 3반 학생의 이름·학번을 등록합니다. 다른 학생의 업무 기록은 삭제하지 않습니다.</p><button class="btn" data-import-class3>3반 학생 계정 등록</button></section>';
   const s=D.settings;
-  if(A())h+=`<section class="panel pad"><h3>연동 설정 (드라이브·캘린더·노션·시간표·이메일)</h3><p class="ev-s">설정을 저장한 다음 동기화·발송을 실행하세요. 자동 실행을 켜면 약 10분 간격으로 처리합니다.</p><div class="ev-s">구글 드라이브: ${s.driveRootUrl?`<a href="${esc(s.driveRootUrl)}" target="_blank" rel="noopener">자료 폴더 열기 ↗</a>${s.driveCustom?'':' (자동 생성)'}`:'첫 파일을 올리면 자동으로 만들어집니다'}<br>캘린더: ${esc(s.calendarId||'미설정')}<br>이메일 알림: ${s.mailEnabled?'사용':'꺼짐'} · 자동 실행: ${s.auto?'사용':'꺼짐'}<br>최근 자동 실행: ${esc(s.lastRun||'없음')}${s.lastError?'<br>실행 오류: '+esc(s.lastError):''}</div><div class="row" style="margin-top:12px"><button class="btn" data-extra-settings>연동 설정 열기</button><button class="btn" data-calendar-create ${s.calendarId?'disabled':''}>전용 캘린더 만들기</button><button class="btn" data-calendar-sync>캘린더 동기화</button><button class="btn" data-mail-send>알림 메일 발송</button><button class="btn" data-auto>${s.auto?'자동 실행 끄기':'자동 실행 켜기'}</button><button class="btn" data-check>첫 실행 점검</button></div></section>`;
+  if(A())h+=`<section class="panel pad"><h3>연동 설정 (드라이브·캘린더·노션·시간표·이메일)</h3><p class="ev-s">설정을 저장한 다음 동기화·발송을 실행하세요. 자동 실행을 켜면 약 10분 간격으로 처리합니다.</p><div class="ev-s">구글 드라이브: ${s.driveRootUrl?`<a href="${esc(s.driveRootUrl)}" target="_blank" rel="noopener">자료 폴더 열기 ↗</a>${s.driveCustom?'':' (자동 생성)'}`:'첫 파일을 올리면 자동으로 만들어집니다'}<br>캘린더: ${esc(s.calendarId||'미설정')}<br>이메일 알림: ${s.mailEnabled?'사용':'꺼짐'} · 자동 실행: ${s.auto?'사용':'꺼짐'}<br>최근 자동 실행: ${esc(s.lastRun||'없음')}${s.lastError?'<br>실행 오류: '+esc(s.lastError):''}</div><div class="row" style="margin-top:12px"><button class="btn" data-extra-settings>연동 설정 열기</button><button class="btn" data-storage-migrate>자료 저장소 이전</button><button class="btn" data-calendar-create ${s.calendarId?'disabled':''}>전용 캘린더 만들기</button><button class="btn" data-calendar-sync>캘린더 동기화</button><button class="btn" data-mail-send>알림 메일 발송</button><button class="btn" data-auto>${s.auto?'자동 실행 끄기':'자동 실행 켜기'}</button><button class="btn" data-check>첫 실행 점검</button></div></section>`;
   h+=`<section class="panel"><div class="pad"><h3>학생 이메일 수신 설정</h3></div>${D.roster.map(r=>{const c=D.contacts.find(c=>c.name===r.name);return `<div class="att"><div class="who"><b>${esc(r.name)}</b><small>${esc(c?.email||'미등록')} · ${c?.enabled?'수신':'수신 안 함'}</small></div><button class="btn sm" data-contact="${esc(r.name)}">수정</button></div>`;}).join('')}</section>`;
   h+=`<section class="panel pad"><details><summary>최근 이메일 발송 기록</summary>${D.mailLog.length?`<div class="tbl-wrap"><table><thead><tr><th>시각</th><th>수신자</th><th>종류</th><th>결과</th></tr></thead><tbody>${[...D.mailLog].reverse().map(x=>`<tr><td>${esc(x.at)}</td><td>${esc(x.name)}</td><td>${esc(x.kind)}</td><td>${esc(x.result)}</td></tr>`).join('')}</tbody></table></div>`:emptyBox('발송 기록이 없습니다')}</details></section>`;return h+styleSettings;
 }
+/* 최고관리자만 검증된 이전 계획을 직접 선택해 실행합니다. 인증정보를 파일에 넣지 않습니다. */
+function storageMigrationDlg(){
+ let running=false;
+ const lock=value=>{running=value;$('#storagePlanFile').disabled=value;const scope=$('#storageScopeCheck');if(scope)scope.disabled=value;const cancel=form.querySelector('[data-close]');if(cancel)cancel.disabled=value;};
+ openDlg('학교 Drive로 자료 이전','<p>원본 파일 ID를 유지하면서 학교 공유 드라이브로 옮기고 게시판·사진첩 연결을 맞춥니다. 이전 계획에는 폴더·파일 ID만 넣습니다.</p><label class="fld"><span>검증한 이전 계획 JSON</span><input type="file" id="storagePlanFile" accept=".json,application/json" required></label><p id="storageMoveProgress" role="status" aria-live="polite">계획 파일을 선택해 주세요.</p><button type="button" class="btn" id="storageScopeCheck">목적 공유 범위 확인</button><p id="storageScopeStatus" class="ev-s" role="status"></p><p class="ev-s">비공개 자기소개서·개인정보·운영 시트는 이전 대상에서 제외합니다. 중단되면 같은 계획으로 다시 실행할 수 있습니다. 완료될 때까지 이 창을 열어 두세요.</p>','이전 시작',async()=>{
+  const box=$('#storageMoveProgress');let moved=0;lock(true);
+  try{const file=$('#storagePlanFile').files[0];if(!file||file.size>500000)throw Error('이전 계획 파일을 확인해 주세요');const plan=JSON.parse(await file.text());
+   if(!plan.source||!plan.target||!Array.isArray(plan.files)||!plan.files.length||plan.files.length>3000||!Array.isArray(plan.folders)||plan.folders.length>100)throw Error('이전 계획 형식이나 범위를 확인해 주세요');
+   for(let n=0;n<plan.files.length;n+=10){box.textContent='파일 이전 중 '+moved+' / '+plan.files.length+'개';const r=await call('moveStorageFiles',{source:plan.source,target:plan.target,files:plan.files.slice(n,n+10)});moved+=(r.moved||[]).length;if(r.error)throw Error(r.error);}
+   box.textContent='파일 '+moved+'개 확인 완료 · 폴더 연결 정리 중';await call('relinkStorageFolders',{source:plan.source,target:plan.target,folders:plan.folders,confirm:true});await reload();toast('자료 '+moved+'개 이전과 폴더 연결을 완료했습니다');return true;
+  }catch(e){box.textContent='이전 확인 '+moved+'개 · '+e.message+' · 같은 계획으로 다시 실행할 수 있습니다.';return false;}finally{lock(false);}
+ });
+ const guardCancel=e=>{if(running){e.preventDefault();e.stopImmediatePropagation();}},guardClick=e=>{if(running&&e.target.closest('[data-close]'))guardCancel(e);},guardUnload=e=>{if(running){e.preventDefault();e.returnValue='';}};
+ dlg.addEventListener('cancel',guardCancel);form.addEventListener('click',guardClick,true);window.addEventListener('beforeunload',guardUnload);
+ dlg.addEventListener('close',()=>{dlg.removeEventListener('cancel',guardCancel);form.removeEventListener('click',guardClick,true);window.removeEventListener('beforeunload',guardUnload);},{once:true});
+ $('#storageScopeCheck').onclick=async()=>{const button=$('#storageScopeCheck'),status=$('#storageScopeStatus');button.disabled=true;status.textContent='공유 범위 확인 중…';try{const f=$('#storagePlanFile').files[0];if(!f||f.size>500000)throw Error('먼저 이전 계획 파일을 선택해 주세요');const p=JSON.parse(await f.text()),info=await call('storageMigrationInfo',{source:p.source,target:p.target});status.textContent='개별 회원 '+info.individuals+'명 · 조직 전체/그룹/링크 공개 없음';}catch(e){status.textContent=e.message;}finally{if(button.isConnected&&!running)button.disabled=false;}};
+ $('#storagePlanFile').onchange=async()=>{try{const f=$('#storagePlanFile').files[0];if(!f||f.size>500000)throw Error();const p=JSON.parse(await f.text());if(!Array.isArray(p.files)||!Array.isArray(p.folders))throw Error();$('#storageMoveProgress').textContent='계획: 파일 '+p.files.length+'개 · 하위 폴더 '+p.folders.length+'개';}catch{$('#storageMoveProgress').textContent='이전 계획 파일을 확인해 주세요.';}};
+}
+$('#main').addEventListener('click',e=>{if(e.target.closest('[data-storage-migrate]')&&A())storageMigrationDlg();});
+
 function contactDlg(name){const c=T()?D.contacts.find(c=>c.name===name)||{}:D.contact;openDlg((name||D.me.name)+' · 이메일 알림',field('이메일','email',c.email||'','email')+`<label class="check"><input type="checkbox" name="enabled" ${c.enabled?'checked':''}> 알림 메일 수신</label>`,'저장',fd=>act('saveContact',{name,...fd},'수신 설정을 저장했습니다'));}
 /* ---------- 시간표·급식 (나이스 · 컴시간알리미) ---------- */
 let schWeek = null, ttGrade = "1", ttCls = "3", ttClasses = [];
