@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="ec288ff">
+<meta name="dj-build" content="ed3a631">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -580,14 +580,14 @@ function gate(msg){
     <div class="row">${[["student","학생"],["teacher","선생님"]].map(([k,l]) => `<button class="chipbtn" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
     <form id="loginForm" class="panel pad" style="display:flex;flex-direction:column;gap:12px">
       ${mode === "student" ? `
-        <label class="fld"><span>이름</span><input type="text" id="lg-name" autocomplete="name" required maxlength="30" value="${esc(lsGet("dj.name") || "")}"></label>
+        <label class="fld"><span>학번</span><input type="text" id="lg-name" inputmode="numeric" autocomplete="username" required maxlength="30" placeholder="예: 20313" value="${esc(lsGet("dj.student.id") || "")}"></label>
         <label class="fld"><span>비밀번호 (처음에는 학번)</span><input type="password" id="lg-pin" autocomplete="current-password" required maxlength="64"></label>`
       : `<label class="fld"><span>교사 이름</span><input type="text" id="lg-teacher-name" autocomplete="username" maxlength="30" value="${esc(lsGet("dj.teacher.name")||"")}"></label><label class="fld"><span>선생님 비밀번호</span><input type="password" id="lg-pw" autocomplete="current-password" required></label>`}
       <label class="check"><input type="checkbox" id="lg-keep"> 내 로그인 정보 저장 (이 기기)</label>
       <button class="btn pri" type="submit">들어가기</button>
     </form>
-    ${lsGet("dj.login.required")==="true"?"":'<button class="btn ghost" type="button" id="guestBrowse">로그인 없이 둘러보기</button>'}
-    <p style="font-size:13px">1~3학년 3반 학생은 이름과 비밀번호로 로그인하세요. 초기 비밀번호는 학번(예: 20313)입니다. 홈 화면에 추가하면 앱처럼 열 수 있습니다.</p></div>`;
+    ${lsGet("dj.login.required")==="false"||(D&&isGuest()&&D.guestView)?'<button class="btn ghost" type="button" id="guestBrowse">로그인 없이 둘러보기</button>':""}
+    <p style="font-size:13px">1~3학년 3반 학생은 학번과 비밀번호로 로그인하세요. 초기 비밀번호는 학번(예: 20313)입니다. 홈 화면에 추가하면 앱처럼 열 수 있습니다.</p></div>`;
   if($("#guestBrowse"))$("#guestBrowse").onclick = () => enterGuest();
   $("#gate").querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { lsSet("dj.mode", b.dataset.mode); gate(); });
   $("#loginForm").onsubmit = async e => {
@@ -599,7 +599,7 @@ function gate(msg){
       cred = authCred;
       if ($("#lg-keep").checked) lsSet("dj.cred", JSON.stringify(cred)); else lsSet("dj.cred", null);
       try{if(cred.session)sessionStorage.setItem("dj.session",JSON.stringify(cred));else sessionStorage.removeItem("dj.session");}catch{}
-      if (c.name) lsSet("dj.name", c.name);if(c.teacherName)lsSet("dj.teacher.name",c.teacherName);
+      if (c.name) { lsSet("dj.name", data.me.name);if(data.me.studentId)lsSet("dj.student.id",data.me.studentId); }if(c.teacherName)lsSet("dj.teacher.name",c.teacherName);
       $("#gate").hidden = true; $("#shell").hidden = false;
       setData(data);
     } catch (err) { gate(err.message); }
@@ -1470,8 +1470,8 @@ async function loadIntroSubmissionList(){const box=form.querySelector('[data-int
 $('#dlgForm').addEventListener('click',e=>{const b=e.target.closest('[data-intro-shared]');if(!b)return;const id=b.dataset.introShared;dlg.addEventListener('close',()=>introDocumentDlg(id),{once:true});dlg.close();});
 function introSubmissionListDlg(){openDlg('자기소개서 제출 목록',introSubmissionListBox(),'닫기',()=>true);loadIntroSubmissionList();}
 function publicIntroEntry(){
- if(D&&isGuest()&&D.studentLoginRequired&&!D.viewer){openDlg('자기소개서 파일 제출','<p>파일 제출과 학생 제출본 HTML 보기는 학생 이름으로 로그인한 뒤 이용해 주세요.</p><button class="btn pri" id="introGuestLogin" type="button">학생 로그인</button>','닫기',()=>true);$('#introGuestLogin').onclick=()=>{dlg.close();introLogin();};return;}
- openDlg('기업 제출용 자기소개서','<p>양식을 받아 작성한 파일을 제출해 주세요. 로그인 없이 제출할 수 있습니다.</p><div class="row"><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroGuide">작성 가이드·예시</button><button type="button" class="btn pri" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다. 다시 제출하면 최신본이 대표로 표시되고 이전본은 제출 이력에 보관됩니다.</p>'+introSubmissionListBox(),'닫기',()=>true);
+ if(D&&isGuest()&&D.studentLoginRequired&&!D.viewer){openDlg('자기소개서 파일 제출','<p>파일 제출과 학생 제출본 HTML 보기는 학생 학번으로 로그인한 뒤 이용해 주세요.</p><button class="btn pri" id="introGuestLogin" type="button">학생 로그인</button>','닫기',()=>true);$('#introGuestLogin').onclick=()=>{dlg.close();introLogin();};return;}
+ openDlg('기업 제출용 자기소개서','<p>양식을 받아 작성한 파일을 제출해 주세요. '+(isGuest()?'로그인 없이 제출할 수 있습니다.':'로그인한 본인 이름으로 제출됩니다.')+'</p><div class="row"><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroGuide">작성 가이드·예시</button><button type="button" class="btn pri" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다. 다시 제출하면 최신본이 대표로 표시되고 이전본은 제출 이력에 보관됩니다.</p>'+introSubmissionListBox(),'닫기',()=>true);
  $('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroGuide').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(introGuideDlg),{once:true});dlg.close();};$('#publicIntroFile').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(publicIntroDlg),{once:true});dlg.close();};loadIntroSubmissionList();
 }
 function publicIntroDlg(){
@@ -2525,10 +2525,10 @@ form.addEventListener("click",e=>{if(!e.target.closest("[data-mh-reset]"))return
  
 (async () => {
   let saved = null; try { saved = JSON.parse(lsGet("dj.cred") || sessionStorage.getItem("dj.session") || "null"); } catch {}
-  const quick = lsGet("dj.login.required")==="true"?null:cachedHome(saved || {});
+  const quick = !saved||!(saved.session||saved.teacher||saved.name)||lsGet("dj.login.required")==="true"?null:cachedHome(saved);
   if (quick) { cred = saved || {}; $("#gate").hidden = true; $("#shell").hidden = false; setData(Object.assign({}, quick, { fromCache: true })); }
   try { const data = await call("load", {deferLinks:true,homeOnly:true}, saved || {}); cred = saved || {}; $("#gate").hidden = true; $("#shell").hidden = false; if (D && !D.homeOnly && !D.fromCache) return; setData(data); }
-  catch (e) { if(location.hash==='#intro'&&!e.loginRequired&&!e.studentLoginRequired){introDeepPending=false;$("#startupScreen").hidden=true;publicIntroEntry();return;} if (quick && !/PIN|비밀번호|이름/.test(e.message)) { toast(e.message); return; } lsSet("dj.cred", null);try{sessionStorage.removeItem("dj.session");}catch{}lsSet(HOME_KEY, null); D = null; gate(e.message); }
+  catch (e) { if(location.hash==='#intro'&&!e.loginRequired&&!e.studentLoginRequired){introDeepPending=false;$("#startupScreen").hidden=true;publicIntroEntry();return;} if (quick && !e.loginRequired && !e.studentLoginRequired && !/PIN|비밀번호|학번|이름|로그인/.test(e.message)) { toast(e.message); return; } lsSet("dj.cred", null);try{sessionStorage.removeItem("dj.session");}catch{}lsSet(HOME_KEY, null); D = null; gate(e.message); }
 })();
 setInterval(() => { if (D && document.visibilityState === "visible" && !dlg.open) reload(); }, 120000);
 })();
