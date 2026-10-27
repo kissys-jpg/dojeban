@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="e6ea7ec">
+<meta name="dj-build" content="373abb6">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1450,7 +1450,7 @@ function introSubmissionListDlg(){openDlg('자기소개서 제출 목록',introS
 function publicIntroEntry(){
  if(D&&isGuest()&&D.studentLoginRequired&&!D.viewer){openDlg('자기소개서 파일 제출','<p>파일 제출과 학생 제출본 HTML 보기는 학생 이름으로 로그인한 뒤 이용해 주세요.</p><button class="btn pri" id="introGuestLogin" type="button">학생 로그인</button>','닫기',()=>true);$('#introGuestLogin').onclick=()=>{dlg.close();introLogin();};return;}
  openDlg('기업 제출용 자기소개서','<p>양식을 받아 작성한 파일을 제출해 주세요. 로그인 없이 제출할 수 있습니다.</p><div class="row"><button type="button" class="btn" id="publicIntroTemplate">양식 받기 (Word)</button><button type="button" class="btn" id="publicIntroGuide">작성 가이드·예시</button><button type="button" class="btn pri" id="publicIntroFile">파일 제출</button></div><p class="ev-s">제출한 자기소개서는 로그인한 학생과 선생님이 HTML로 볼 수 있습니다. 제출 후 수정이 필요하면 선생님께 말씀해 주세요.</p>'+introSubmissionListBox(),'닫기',()=>true);
- $('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroGuide').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(introGuideDlg),{once:true});dlg.close();};$('#publicIntroFile').onclick=()=>{dlg.close();publicIntroDlg();};loadIntroSubmissionList();
+ $('#publicIntroTemplate').onclick=introTemplateDownload;$('#publicIntroGuide').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(introGuideDlg),{once:true});dlg.close();};$('#publicIntroFile').onclick=()=>{dlg.addEventListener('close',()=>setTimeout(publicIntroDlg),{once:true});dlg.close();};loadIntroSubmissionList();
 }
 function publicIntroDlg(){
  const submissionKey=newUid();let sent=false,dirty=false;
