@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="2c40ea3">
+<meta name="dj-build" content="5e31a5b">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -321,7 +321,9 @@ body{margin:0} [hidden]{display:none!important}
 .photo-caption{display:block;padding:9px;font-size:13px;overflow-wrap:anywhere}
 .photo-full{display:grid;place-items:center;min-height:180px}
 .photo-full img{max-width:100%;max-height:65vh;object-fit:contain}
-.photo-drop.drag{outline:2px dashed var(--accent);outline-offset:5px}
+.photo-drop-target{display:block;width:100%;box-sizing:border-box;border:2px dashed var(--accent);border-radius:12px;background:var(--surface,#fff);color:var(--ink);padding:24px 14px;margin:12px 0 16px;text-align:center;cursor:pointer;min-height:115px;font:inherit}
+.photo-drop-target strong{display:block;font-size:17px;margin-bottom:6px}.photo-drop-target span{display:block}.photo-drop-target.drag{background:var(--bg);outline:3px solid var(--accent);outline-offset:2px}
+.photo-queue-status{margin:8px 0;overflow-wrap:anywhere}.photo-drop.drag{outline:2px dashed var(--accent);outline-offset:5px}
 @media(max-width:390px){.photo-grid,.photo-grid.albums{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
 .today-notice{border-top:1px solid var(--line)}
 .today-notice:first-of-type{border-top:0}
@@ -1859,10 +1861,12 @@ function upPaint(){
   if (!el) { el = document.createElement("section"); el.id = "upPanel"; el.className = "up-panel"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
   const b = upBatch, done = b.items.filter(x => x.state === "ok" || x.state === "bad").length, sec = s0 => Math.max(0, Math.round((Date.now() - s0) / 1000));
   const head = b.closed ? b.msg : "Google Drive에 올리는 중 " + done + "/" + b.items.length + " · " + sec(b.t0) + "초";
-  el.innerHTML = '<div class="up-head"><b>' + esc(head) + '</b><button type="button" class="btn sm ghost" data-up-close aria-label="닫기">×</button></div>' + b.items.map(it => {
+  const expanded=!!el.querySelector('[data-up-files]')?.open;
+  const rows=b.items.map(it => {
     const busy = it.state === "run" || it.state === "save", ind = busy && it.pct == null;
     return '<div class="up-item up-' + it.state + '"><div class="up-name"><span>' + esc(it.name) + '</span><span class="ev-s">' + fmtSize(it.size) + '</span></div><div class="up-bar' + (ind ? ' ind' : '') + '"><i style="width:' + (ind ? 35 : Math.max(2, Math.min(100, it.pct || 0))) + '%"></i></div><div class="ev-s">' + esc(it.text) + (busy && it.t0 ? " · " + sec(it.t0) + "초" : "") + '</div></div>';
   }).join("");
+  el.innerHTML='<div class="up-head"><b>'+esc(head)+'</b><button type="button" class="btn sm ghost" data-up-close aria-label="닫기">×</button></div>'+(b.photoQueue?'<details data-up-files '+(expanded?'open':'')+'><summary>파일별 진행 보기 · '+done+'/'+b.items.length+'</summary>'+rows+'</details>':rows);
 }
 document.addEventListener("click", e => { if (e.target.closest("[data-up-close]")) { upBatch = null; upPaint(); } });
  
@@ -2085,6 +2089,7 @@ $("#main").addEventListener("click", e => {
 $("#main").addEventListener("change", e => { const inp = e.target.closest("[data-drv-file]"); if (!inp) return; const files = Array.from(inp.files || []); inp.value = ""; drvUpload(inp.dataset.drvFile, files); });
 /* ---------- Drive 사진첩: 화면에 들어온 사진만 미리 읽기 ---------- */
 let photoMediaFilter="all",photoByFilter="all",photoQuery="",photoActor="",photoVideoUrl="";
+let photoUploadRun=null;
 const photoState={data:null,folder:"",loading:false,error:"",ticket:0,limit:60},photoCache=new Map();
 let photoObserver=null,photoActive=0;const photoQueue=[];
 function vPhotos(){return extraHead("사진첩","대회·행사별 앨범에 사진·영상을 함께 모읍니다. 로그인한 학생과 교사는 올릴 수 있습니다.",T()?'<button class="btn" data-photo-setup>Drive 폴더 연결</button>':"")+'<section class="panel pad" id="photoGallery" aria-live="polite"><p class="ev-s">사진첩을 불러오는 중…</p></section>';}
@@ -2104,12 +2109,13 @@ function paintPhotos(){
  const files=photoFiltered();
  const crumbs=d.path.map((f,i)=>i===d.path.length-1?'<b>'+esc(f.name)+'</b>':'<button class="btn sm ghost" data-photo-folder="'+esc(f.id)+'">'+esc(f.name)+'</button>').join('<span class="ev-s">›</span>');
  el.innerHTML='<div class="row" style="margin-bottom:14px">'+crumbs+'<span class="spacer"></span>'+shareButton('album',d.folder)+'<button class="btn sm" data-photo-refresh>새로고침</button>'+(d.url?'<a class="btn sm ghost" href="'+esc(d.url)+'" target="_blank" rel="noopener">Drive에서 열기 ↗</a>':"")+(T()?'<button class="btn sm" data-photo-album>+ 앨범 만들기</button>':'')+(d.canUpload?'<button class="btn sm pri" data-photo-pick>+ 사진·영상 올리기</button><input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,image/heic,video/mp4,video/quicktime,.mov" hidden id="photoFiles">':"")+'</div>'
+ +(d.canUpload?'<button type="button" class="photo-drop-target" data-photo-drop data-photo-drop-pick><strong>사진·영상을 여기에 끌어다 놓으세요</strong><span>또는 눌러서 파일 선택 · 여러 파일 가능</span><span class="ev-s">업로드 중에도 추가할 수 있습니다 · 현재 앨범에 저장</span></button><p class="photo-queue-status ev-s" data-photo-queue-status role="status"></p>':'')
  +(d.folders.length?'<h3>앨범</h3><div class="photo-grid albums">'+d.folders.map(f=>'<button class="photo-card" data-photo-folder="'+esc(f.id)+'">'+photoThumb('data-photo-cover="'+esc(f.id)+'"',f.name)+'<span class="photo-caption">📁 '+esc(f.name)+'</span></button>').join('')+'</div>':"")
  +'<div class="row" style="margin:16px 0 10px"><h3>사진·영상</h3><span class="ev-s">'+files.length+'개 / '+d.photos.length+'개</span></div>'
  +'<div class="row" style="margin-bottom:12px"><label>종류 <select id="photoMediaFilter">'+[['all','전체'],['photo','사진'],['video','영상']].map(([k,l])=>opt(k,photoMediaFilter,l)).join('')+'</select></label><label>올린 사람 <select id="photoByFilter">'+[['all','전체'],...[...new Set(d.photos.map(f=>f.by).filter(Boolean))].map(n=>[n,n])].map(([k,l])=>opt(k,photoByFilter,l)).join('')+'</select></label><label>파일 찾기 <input id="photoQuery" type="search" value="'+esc(photoQuery)+'" placeholder="파일 이름"></label></div>'
  +'<div data-photo-drop class="photo-drop">'+(files.length?'<div class="photo-grid">'+files.slice(0,st.limit).map(f=>'<button class="photo-card" data-photo-view="'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기">'+(f.video?'<span class="photo-picture" style="display:grid;place-items:center;font-size:36px" aria-hidden="true">▶</span>':photoThumb('data-photo-img="'+esc(f.id)+'" data-photo-updated="'+esc(f.updated)+'"',f.name))+'<span class="photo-caption">'+esc(f.name)+'<span class="photo-by">'+esc(f.by)+(f.accountUpload?'':' (Drive 등록)')+'</span><span class="photo-by">올린 시각 '+esc(f.uploadedAt||'확인 안 됨')+'</span></span></button>').join('')+'</div>':'<p class="ev-s">표시할 사진·영상이 없습니다. '+(d.canUpload?'파일을 끌어다 놓거나 사진·영상 올리기를 누르세요.':'위 앨범을 선택해 주세요.')+'</p>')+(d.canUpload?'<p class="ev-s" style="margin-top:12px">여러 파일을 끌어다 놓으면 이 앨범의 Google Drive 폴더에 저장됩니다. 파일당 '+sizeLimitText()+' 이하 · 올린 사람과 시각은 자동 기록됩니다.</p>':'')+'</div>'
  +(files.length>st.limit?'<button class="btn" style="margin-top:12px" data-photo-more>사진·영상 더 보기</button>':'')+(d.limited?'<p class="ev-s">폴더당 최대 300개 파일·200개 앨범까지 표시합니다. 대회별 하위 앨범으로 나눠 주세요.</p>':'');
- queuePhotoThumbs(el);
+ paintPhotoQueueStatus();queuePhotoThumbs(el);
 }
 function queuePhotoThumbs(el){
  if(photoObserver)photoObserver.disconnect();
@@ -2125,11 +2131,39 @@ async function pumpPhotoThumbs(){
 }
 function photoSetupDlg(){openDlg("사진첩 Drive 폴더 연결",'<p class="ev-s">이 폴더와 하위 폴더의 사진은 알림판을 보는 학생들에게 표시됩니다. 행사·프로젝트별 폴더를 앨범으로 정리해 주세요.</p>'+field('사진첩 Drive 폴더 주소','url',photoState.data?.path?.[0]?.id?'https:\/\/drive.google.com/drive/folders/'+photoState.data.path[0].id:'','url','required')+driveShareHelp(),"연결",async fd=>{try{await call('photoSetup',fd);photoCache.clear();await loadPhotos('');return true;}catch(e){toast(e.message);return false;}});}
 function photoAlbumDlg(){openDlg("새 앨범 만들기",'<p class="ev-s">대회마다 한 앨범을 만들고 사진·영상을 함께 모으세요. 예: 2026-10-29 영천 로봇대회. 필요하면 그 안에 준비·본선·시상 앨범을 나눌 수 있습니다.</p>'+field("앨범 이름","name","","text",'required maxlength="80" placeholder="예: 2026-10-29 영천 로봇대회"'),"만들기",async fd=>{try{const r=await call('photoCreateAlbum',{folder:photoState.folder,name:fd.name});await loadPhotos(r.folder);return true;}catch(e){toast(e.message);return false;}});}
+function paintPhotoQueueStatus(){
+ const r=photoUploadRun,el=$('[data-photo-queue-status]');if(!el)return;
+ el.textContent=r&&r.running?'업로드 중 · 완료 '+r.done+'/'+r.total+'개 · 대기 '+r.jobs.length+'개 · 파일을 더 추가할 수 있습니다':r?r.summary:'선택한 앨범에 저장됩니다. 같은 내용의 파일은 중복으로 저장하지 않습니다.';
+}
 async function photoUploadFiles(list){
- if(!photoState.data?.canUpload)return;const folder=photoState.folder,files=Array.from(list||[]);let ok=0;const errors=[];
- upBegin(files);
- for(const f of files){try{if(!/\.(jpe?g|png|gif|webp|heic|mp4|mov)$/i.test(f.name))throw new Error('사진 또는 MP4·MOV 영상을 선택해 주세요');if(f.size>MAX_MB*1024*1024)throw new Error(sizeLimitText()+' 이하로 올려 주세요');await call('photoUpload',{folder,upload:await toUpload(f)});ok++;upDone(f);}catch(e){errors.push(f.name+': '+e.message);upDone(f,e.message);}}
- const unit=files.every(f=>!f.type.startsWith('video/')&&!/\.(mp4|mov)$/i.test(f.name))?'장':'개';upEnd(ok+unit+' 저장'+(errors.length?' · '+errors.length+unit+' 실패':''));photoCache.clear();await loadPhotos(folder);
+ if(!photoState.data?.canUpload)return;const files=Array.from(list||[]);if(!files.length)return;
+ const owner=JSON.stringify(cred||{}),folder=photoState.folder;let r=photoUploadRun;
+ if(r&&r.running&&r.owner!==owner){toast('이전 계정의 업로드가 끝난 후 다시 추가해 주세요.');return;}
+ const items=files.map(f=>({name:f.name,size:f.size,pct:0,text:'대기 중',state:'wait',t0:0}));
+ if(!r||!r.running){r={running:true,owner,jobs:[],total:0,done:0,ok:0,skipped:0,bad:0,imagesOnly:true,summary:'',batch:upBegin([])};photoUploadRun=r;r.batch.photoQueue=true;}
+ r.batch.items.push(...items);r.total+=files.length;r.jobs.push(...files.map(file=>({file,folder})));if(files.some(f=>/\.(mp4|mov)$/i.test(f.name)))r.imagesOnly=false;
+ if(upBatch!==r.batch){upBatch=r.batch;clearTimeout(upHideT);}upPaint();paintPhotoQueueStatus();
+ if(!r.promise)r.promise=drainPhotoUploads(r);return r.promise;
+}
+async function drainPhotoUploads(r){
+ while(r.jobs.length){
+  const job=r.jobs.shift(),f=job.file;paintPhotoQueueStatus();let index=-1;
+  try{
+   if(JSON.stringify(cred||{})!==r.owner)throw Error('로그인 계정이 바뀌어 업로드하지 않았습니다');
+   if(!/\.(jpe?g|png|gif|webp|heic|mp4|mov)$/i.test(f.name))throw Error('사진 또는 MP4·MOV 영상을 선택해 주세요');
+   if(!f.size||f.size>MAX_MB*1024*1024)throw Error(sizeLimitText()+' 이하의 파일을 선택해 주세요');
+   if(upBatch!==r.batch)upBatch=r.batch;
+   index=r.batch.items.findIndex(x=>x.name===f.name&&x.size===f.size&&x.state==='wait');
+   const upload=await toUpload(f);
+   if(JSON.stringify(cred||{})!==r.owner)throw Error('로그인 계정이 바뀌어 업로드하지 않았습니다');
+   const result=await call('photoUpload',{folder:job.folder,upload});
+   upDone(f);if(result&&result.duplicate){r.skipped++;if(index>=0)upSet(index,{text:'동일한 파일이 있어 건너뜀',state:'ok',pct:100});}else r.ok++;
+  }catch(e){r.bad++;upDone(f,e.message);}
+  r.done++;paintPhotoQueueStatus();
+ }
+ r.running=false;const unit=r.imagesOnly?'장':'개';r.summary=r.ok+unit+' 저장'+(r.skipped?' · '+r.skipped+'개 중복 건너뜀':'')+(r.bad?' · '+r.bad+'개 실패':'');
+ if(upBatch===r.batch)upEnd(r.summary);paintPhotoQueueStatus();photoCache.clear();
+ if(tab==='photos'&&JSON.stringify(cred||{})===r.owner)await loadPhotos(photoState.folder);
 }
 async function photoViewer(id){
  const files=photoFiltered(),i=files.findIndex(f=>f.id===id),f=files[i];if(!f)return;
@@ -2150,12 +2184,12 @@ $('#main').addEventListener('change',e=>{if(e.target.id==='photoMediaFilter'){ph
 $('#main').addEventListener('input',e=>{if(e.target.id!=='photoQuery')return;photoQuery=e.target.value;const pos=e.target.selectionStart;paintPhotos();const input=$('#photoQuery');if(input){input.focus();input.setSelectionRange(pos,pos);}});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-photo-view],[data-photo-prev],[data-photo-next],[data-photo-dl]');if(!b)return;const x=b.dataset;if(x.photoDl)return drvDownload('photos',x.photoDl);return photoViewer(x.photoView||x.photoPrev||x.photoNext);});
 $('#main').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const x=b.dataset;
- if(x.photoFolder!==undefined)return loadPhotos(x.photoFolder);if(x.photoRefresh!==undefined){photoCache.clear();return loadPhotos(photoState.folder);}if(x.photoSetup!==undefined)return photoSetupDlg();if(x.photoAlbum!==undefined)return photoAlbumDlg();if(x.photoPick!==undefined)return $('#photoFiles')?.click();if(x.photoMore!==undefined){photoState.limit+=60;return paintPhotos();}
+ if(x.photoFolder!==undefined)return loadPhotos(x.photoFolder);if(x.photoRefresh!==undefined){photoCache.clear();return loadPhotos(photoState.folder);}if(x.photoSetup!==undefined)return photoSetupDlg();if(x.photoAlbum!==undefined)return photoAlbumDlg();if(x.photoPick!==undefined||x.photoDropPick!==undefined)return $('#photoFiles')?.click();if(x.photoMore!==undefined){photoState.limit+=60;return paintPhotos();}
  if(x.photoDefault!==undefined){b.disabled=true;try{await call('photoSetup',{create:true});await loadPhotos('');}catch(e){toast(e.message);b.disabled=false;}}
 });
 $('#main').addEventListener('change',e=>{if(e.target.id==='photoFiles'){const files=Array.from(e.target.files||[]);e.target.value='';photoUploadFiles(files);}});
 for(const type of ['dragenter','dragover'])$('#main').addEventListener(type,e=>{if(e.target.closest('[data-photo-drop]')&&photoState.data?.canUpload){e.preventDefault();e.target.closest('[data-photo-drop]').classList.add('drag');}});
-$('#main').addEventListener('dragleave',e=>e.target.closest('[data-photo-drop]')?.classList.remove('drag'));
+$('#main').addEventListener('dragleave',e=>{const zone=e.target.closest('[data-photo-drop]');if(zone&&!zone.contains(e.relatedTarget))zone.classList.remove('drag');});
 $('#main').addEventListener('drop',e=>{const zone=e.target.closest('[data-photo-drop]');if(!zone)return;e.preventDefault();e.stopPropagation();zone.classList.remove('drag');photoUploadFiles(e.dataTransfer.files);});
 
 /* ---------- Drive 폴더 접근 신청 ---------- */
