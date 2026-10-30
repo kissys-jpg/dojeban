@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="5e31a5b">
+<meta name="dj-build" content="fbebb82">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1855,32 +1855,35 @@ function upEnd(msg){
   upBatch.msg = msg || (bad ? ok + "개 올림 · " + bad + "개 실패" : ok + "개 모두 올렸습니다");
   upPaint(); clearTimeout(upHideT); if (!bad) upHideT = setTimeout(() => { upBatch = null; upPaint(); }, 6000);
 }
+function upPercent(b){const total=b.items.reduce((n,it)=>n+Math.max(1,it.size),0);if(!total)return 0;const done=b.items.reduce((n,it)=>n+Math.max(1,it.size)*(['ok','bad'].includes(it.state)?1:Math.min(99,Number(it.pct)||0)/100),0);return Math.min(100,Math.floor(done/total*100));}
 function upPaint(){
   let el = document.getElementById("upPanel");
   if (!upBatch) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement("section"); el.id = "upPanel"; el.className = "up-panel"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
   const b = upBatch, done = b.items.filter(x => x.state === "ok" || x.state === "bad").length, sec = s0 => Math.max(0, Math.round((Date.now() - s0) / 1000));
-  const head = b.closed ? b.msg : "Google Drive에 올리는 중 " + done + "/" + b.items.length + " · " + sec(b.t0) + "초";
+  const head = b.closed ? b.msg : "Google Drive에 올리는 중 " + done + "/" + b.items.length + (b.photoQueue?" · "+upPercent(b)+"%":"") + " · " + sec(b.t0) + "초";
   const expanded=!!el.querySelector('[data-up-files]')?.open;
   const rows=b.items.map(it => {
     const busy = it.state === "run" || it.state === "save", ind = busy && it.pct == null;
-    return '<div class="up-item up-' + it.state + '"><div class="up-name"><span>' + esc(it.name) + '</span><span class="ev-s">' + fmtSize(it.size) + '</span></div><div class="up-bar' + (ind ? ' ind' : '') + '"><i style="width:' + (ind ? 35 : Math.max(2, Math.min(100, it.pct || 0))) + '%"></i></div><div class="ev-s">' + esc(it.text) + (busy && it.t0 ? " · " + sec(it.t0) + "초" : "") + '</div></div>';
+    return '<div class="up-item up-' + it.state + '"><div class="up-name"><span>' + esc(it.name) + '</span><span class="ev-s">'+(it.state==='ok'?'100% · ':typeof it.pct==='number'?Math.min(it.state==='save'?99:100,it.pct)+'% · ':'') + fmtSize(it.size) + '</span></div><div class="up-bar' + (ind ? ' ind' : '') + '"><i style="width:' + (ind ? 35 : Math.max(2, Math.min(100, it.pct || 0))) + '%"></i></div><div class="ev-s">' + esc(it.text) + (busy && it.t0 ? " · " + sec(it.t0) + "초" : "") + '</div></div>';
   }).join("");
-  el.innerHTML='<div class="up-head"><b>'+esc(head)+'</b><button type="button" class="btn sm ghost" data-up-close aria-label="닫기">×</button></div>'+(b.photoQueue?'<details data-up-files '+(expanded?'open':'')+'><summary>파일별 진행 보기 · '+done+'/'+b.items.length+'</summary>'+rows+'</details>':rows);
+  el.innerHTML='<div class="up-head"><b>'+esc(head)+'</b><button type="button" class="btn sm ghost" data-up-close aria-label="닫기">×</button></div>'+(b.photoQueue?'<details data-up-files '+(expanded?'open':'')+'><summary>파일별 진행 보기 · '+done+'/'+b.items.length+'</summary>'+rows+'</details>':rows);if(b.photoQueue)paintPhotoQueueStatus();
 }
 document.addEventListener("click", e => { if (e.target.closest("[data-up-close]")) { upBatch = null; upPaint(); } });
  
-async function toUpload(f){
+async function toUpload(f,resume){
   const i = upIndex(f);
   try {
     if (f.size <= DIRECT_MB * 1024 * 1024) { upSet(i, { state: "run", pct: null, text: "파일 읽는 중" }); const b64 = await blobB64(f); upSet(i, { state: "save", pct: null, text: "Google Drive로 보내는 중" }); return { name: f.name, base64: b64 }; }
     upSet(i, { state: "run", pct: 0, text: "업로드 준비 중" });
-    const s = await call("uploadStart", { name: f.name, size: f.size });
-    let off = 0, tries = 0;
+    let s,off=0;
+    if(resume&&resume.id){try{const status=await call("uploadStatus",{id:resume.id});off=status.got;resume.offset=off;upSet(i,{state:"run",pct:Math.floor(off/f.size*100),text:"이전 전송 위치에서 이어 올리는 중"});if(status.staged){resume.staged=status.staged;return {name:f.name,staged:status.staged};}s={id:resume.id,chunk:status.chunk};}catch(e){if(!/시간.*지났/.test(e.message))throw e;resume.id="";resume.offset=0;}}
+    if(!s){s=await call("uploadStart",{name:f.name,size:f.size});if(resume){resume.id=s.id;resume.chunk=s.chunk;resume.offset=0;}}
+    let tries=0;
     while (off < f.size) {
       const b64 = await blobB64(f.slice(off, Math.min(f.size, off + s.chunk)));
       let r; try { r = await call("uploadChunk", { id: s.id, offset: off, base64: b64 }); tries = 0; } catch (e) { if (++tries > 2) throw new Error(f.name + ": " + e.message); upSet(i, { text: "연결이 끊겨 다시 보내는 중 (" + tries + "/2)" }); continue; }
-      off = r.got; const pct = Math.min(100, Math.round(off / f.size * 100)); upSet(i, { pct, text: pct + "% · " + fmtSize(off) + " / " + fmtSize(f.size) });
+      off = r.got;if(resume){resume.offset=off;if(r.staged)resume.staged=r.staged;} const pct = Math.min(100, Math.round(off / f.size * 100)); upSet(i, { pct, text: pct + "% · " + fmtSize(off) + " / " + fmtSize(f.size) });
       if (r.staged) { upSet(i, { state: "save", pct: 100, text: "Drive 폴더에 저장 중" }); return { name: f.name, staged: r.staged }; }
     }
     throw new Error(f.name + ": 업로드를 마치지 못했습니다");
@@ -2089,7 +2092,7 @@ $("#main").addEventListener("click", e => {
 $("#main").addEventListener("change", e => { const inp = e.target.closest("[data-drv-file]"); if (!inp) return; const files = Array.from(inp.files || []); inp.value = ""; drvUpload(inp.dataset.drvFile, files); });
 /* ---------- Drive 사진첩: 화면에 들어온 사진만 미리 읽기 ---------- */
 let photoMediaFilter="all",photoByFilter="all",photoQuery="",photoActor="",photoVideoUrl="";
-let photoUploadRun=null;
+let photoUploadRun=null,photoFailedJobs=[],photoWake=null,photoWakePending=false,photoWakeInfo="";
 const photoState={data:null,folder:"",loading:false,error:"",ticket:0,limit:60},photoCache=new Map();
 let photoObserver=null,photoActive=0;const photoQueue=[];
 function vPhotos(){return extraHead("사진첩","대회·행사별 앨범에 사진·영상을 함께 모읍니다. 로그인한 학생과 교사는 올릴 수 있습니다.",T()?'<button class="btn" data-photo-setup>Drive 폴더 연결</button>':"")+'<section class="panel pad" id="photoGallery" aria-live="polite"><p class="ev-s">사진첩을 불러오는 중…</p></section>';}
@@ -2108,9 +2111,9 @@ function paintPhotos(){
  if(!d.connected){el.innerHTML='<h3>사진첩을 준비해 주세요</h3><p class="ev-s">선생님이 구글 드라이브 사진 폴더를 연결하면 앨범과 사진이 여기에 표시됩니다.</p>'+(T()?'<div class="row"><button class="btn pri" data-photo-default>사진첩 폴더 만들기</button><button class="btn" data-photo-setup>기존 Drive 폴더 연결</button></div>':"");return;}
  const files=photoFiltered();
  const crumbs=d.path.map((f,i)=>i===d.path.length-1?'<b>'+esc(f.name)+'</b>':'<button class="btn sm ghost" data-photo-folder="'+esc(f.id)+'">'+esc(f.name)+'</button>').join('<span class="ev-s">›</span>');
- el.innerHTML='<div class="row" style="margin-bottom:14px">'+crumbs+'<span class="spacer"></span>'+shareButton('album',d.folder)+'<button class="btn sm" data-photo-refresh>새로고침</button>'+(d.url?'<a class="btn sm ghost" href="'+esc(d.url)+'" target="_blank" rel="noopener">Drive에서 열기 ↗</a>':"")+(T()?'<button class="btn sm" data-photo-album>+ 앨범 만들기</button>':'')+(d.canUpload?'<button class="btn sm pri" data-photo-pick>+ 사진·영상 올리기</button><input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,image/heic,video/mp4,video/quicktime,.mov" hidden id="photoFiles">':"")+'</div>'
+ el.innerHTML='<div class="row" style="margin-bottom:14px">'+crumbs+'<span class="spacer"></span>'+shareButton('album',d.folder)+(T()&&!isViewer()&&d.path.length>1?'<button class="btn sm" data-photo-rename="'+esc(d.folder)+'">이름 변경</button>':'')+'<button class="btn sm" data-photo-refresh>새로고침</button>'+(d.url?'<a class="btn sm ghost" href="'+esc(d.url)+'" target="_blank" rel="noopener">Drive에서 열기 ↗</a>':"")+(T()&&!isViewer()?'<button class="btn sm" data-photo-album>+ 앨범 만들기</button>':'')+(d.canUpload?'<button class="btn sm pri" data-photo-pick>+ 사진·영상 올리기</button><input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,image/heic,video/mp4,video/quicktime,.mov" hidden id="photoFiles">':"")+'</div>'
  +(d.canUpload?'<button type="button" class="photo-drop-target" data-photo-drop data-photo-drop-pick><strong>사진·영상을 여기에 끌어다 놓으세요</strong><span>또는 눌러서 파일 선택 · 여러 파일 가능</span><span class="ev-s">업로드 중에도 추가할 수 있습니다 · 현재 앨범에 저장</span></button><p class="photo-queue-status ev-s" data-photo-queue-status role="status"></p>':'')
- +(d.folders.length?'<h3>앨범</h3><div class="photo-grid albums">'+d.folders.map(f=>'<button class="photo-card" data-photo-folder="'+esc(f.id)+'">'+photoThumb('data-photo-cover="'+esc(f.id)+'"',f.name)+'<span class="photo-caption">📁 '+esc(f.name)+'</span></button>').join('')+'</div>':"")
+ +(d.folders.length?'<h3>앨범</h3><div class="photo-grid albums">'+d.folders.map(f=>'<div><button class="photo-card" style="width:100%" data-photo-folder="'+esc(f.id)+'">'+photoThumb('data-photo-cover="'+esc(f.id)+'"',f.name)+'<span class="photo-caption">📁 '+esc(f.name)+'</span></button>'+(T()&&!isViewer()?'<button class="btn sm ghost" data-photo-rename="'+esc(f.id)+'" style="margin-top:5px">이름 변경</button>':'')+'</div>').join('')+'</div>':"")
  +'<div class="row" style="margin:16px 0 10px"><h3>사진·영상</h3><span class="ev-s">'+files.length+'개 / '+d.photos.length+'개</span></div>'
  +'<div class="row" style="margin-bottom:12px"><label>종류 <select id="photoMediaFilter">'+[['all','전체'],['photo','사진'],['video','영상']].map(([k,l])=>opt(k,photoMediaFilter,l)).join('')+'</select></label><label>올린 사람 <select id="photoByFilter">'+[['all','전체'],...[...new Set(d.photos.map(f=>f.by).filter(Boolean))].map(n=>[n,n])].map(([k,l])=>opt(k,photoByFilter,l)).join('')+'</select></label><label>파일 찾기 <input id="photoQuery" type="search" value="'+esc(photoQuery)+'" placeholder="파일 이름"></label></div>'
  +'<div data-photo-drop class="photo-drop">'+(files.length?'<div class="photo-grid">'+files.slice(0,st.limit).map(f=>'<button class="photo-card" data-photo-view="'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기">'+(f.video?'<span class="photo-picture" style="display:grid;place-items:center;font-size:36px" aria-hidden="true">▶</span>':photoThumb('data-photo-img="'+esc(f.id)+'" data-photo-updated="'+esc(f.updated)+'"',f.name))+'<span class="photo-caption">'+esc(f.name)+'<span class="photo-by">'+esc(f.by)+(f.accountUpload?'':' (Drive 등록)')+'</span><span class="photo-by">올린 시각 '+esc(f.uploadedAt||'확인 안 됨')+'</span></span></button>').join('')+'</div>':'<p class="ev-s">표시할 사진·영상이 없습니다. '+(d.canUpload?'파일을 끌어다 놓거나 사진·영상 올리기를 누르세요.':'위 앨범을 선택해 주세요.')+'</p>')+(d.canUpload?'<p class="ev-s" style="margin-top:12px">여러 파일을 끌어다 놓으면 이 앨범의 Google Drive 폴더에 저장됩니다. 파일당 '+sizeLimitText()+' 이하 · 올린 사람과 시각은 자동 기록됩니다.</p>':'')+'</div>'
@@ -2130,38 +2133,55 @@ async function pumpPhotoThumbs(){
  finally{photoActive--;pumpPhotoThumbs();}pumpPhotoThumbs();
 }
 function photoSetupDlg(){openDlg("사진첩 Drive 폴더 연결",'<p class="ev-s">이 폴더와 하위 폴더의 사진은 알림판을 보는 학생들에게 표시됩니다. 행사·프로젝트별 폴더를 앨범으로 정리해 주세요.</p>'+field('사진첩 Drive 폴더 주소','url',photoState.data?.path?.[0]?.id?'https:\/\/drive.google.com/drive/folders/'+photoState.data.path[0].id:'','url','required')+driveShareHelp(),"연결",async fd=>{try{await call('photoSetup',fd);photoCache.clear();await loadPhotos('');return true;}catch(e){toast(e.message);return false;}});}
+function photoRenameDlg(id){const d=photoState.data,f=d.folders.find(f=>f.id===id)||d.path.find(f=>f.id===id);if(!T()||isViewer()||!f)return;openDlg('앨범 이름 변경',field('앨범 이름','name',f.name,'text','required maxlength="80"')+'<p class="ev-s">공유 주소와 사진·영상은 그대로 유지됩니다.</p>','변경',async fd=>{try{await call('photoRenameAlbum',{folder:id,name:fd.name});await loadPhotos(photoState.folder);toast('앨범 이름을 변경했습니다');return true;}catch(e){toast(e.message);return false;}});}
 function photoAlbumDlg(){openDlg("새 앨범 만들기",'<p class="ev-s">대회마다 한 앨범을 만들고 사진·영상을 함께 모으세요. 예: 2026-10-29 영천 로봇대회. 필요하면 그 안에 준비·본선·시상 앨범을 나눌 수 있습니다.</p>'+field("앨범 이름","name","","text",'required maxlength="80" placeholder="예: 2026-10-29 영천 로봇대회"'),"만들기",async fd=>{try{const r=await call('photoCreateAlbum',{folder:photoState.folder,name:fd.name});await loadPhotos(r.folder);return true;}catch(e){toast(e.message);return false;}});}
-function paintPhotoQueueStatus(){
- const r=photoUploadRun,el=$('[data-photo-queue-status]');if(!el)return;
- el.textContent=r&&r.running?'업로드 중 · 완료 '+r.done+'/'+r.total+'개 · 대기 '+r.jobs.length+'개 · 파일을 더 추가할 수 있습니다':r?r.summary:'선택한 앨범에 저장됩니다. 같은 내용의 파일은 중복으로 저장하지 않습니다.';
+async function photoKeepAwake(){
+ if(!photoUploadRun?.running||document.visibilityState!=='visible'||photoWake||photoWakePending)return;
+ if(!navigator.wakeLock){photoWakeInfo='이 기기에서는 화면을 직접 켜 두세요.';return;}
+ photoWakePending=true;try{const w=await navigator.wakeLock.request('screen');if(!photoUploadRun?.running){await w.release();return;}photoWake=w;photoWakeInfo='업로드 중 화면 꺼짐 방지 켜짐';w.addEventListener('release',()=>{if(photoWake===w){photoWake=null;photoWakeInfo='화면 유지가 해제되었습니다. 이 화면을 켜 두세요.';paintPhotoQueueStatus();}});}catch{photoWakeInfo='자동 화면 유지가 허용되지 않았습니다. 화면을 켜 두세요.';}finally{photoWakePending=false;paintPhotoQueueStatus();}
 }
-async function photoUploadFiles(list){
- if(!photoState.data?.canUpload)return;const files=Array.from(list||[]);if(!files.length)return;
+function photoReleaseAwake(){const w=photoWake;photoWake=null;if(w)w.release().catch(()=>{});}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){photoKeepAwake();paintPhotoQueueStatus();}});
+window.addEventListener('beforeunload',e=>{if(photoUploadRun?.running){e.preventDefault();e.returnValue='';}});
+function paintPhotoQueueStatus(){
+ const r=photoUploadRun,el=$('[data-photo-queue-status]');if(!el)return;const owner=JSON.stringify(cred||{}),failed=photoFailedJobs.map((job,i)=>({job,i})).filter(x=>x.job.owner===owner);
+ const pct=r?upPercent(r.batch):0,current=r?.running&&r.current,it=current&&r.batch.items[current.progressIndex],one=it&&typeof it.pct==='number'?Math.min(it.state==='save'?99:100,it.pct):0;
+ el.innerHTML=(r&&r.running?'<b>전체 처리 '+pct+'% · 완료 '+r.done+'/'+r.total+'개 · 대기 '+r.jobs.length+'개</b><progress value="'+pct+'" max="100" style="display:block;width:100%;margin:8px 0" aria-label="전체 업로드 처리 진행률"></progress>'+(current?'<span>'+esc(current.file.name)+' · '+one+'%'+(it?.state==='save'?' · 저장 확인 중':'')+'</span>':'')+'<span style="display:block">파일을 더 추가할 수 있습니다. '+esc(photoWakeInfo)+'</span>':r?'전체 처리 '+pct+'% · '+esc(r.summary):'선택한 앨범에 저장됩니다. 같은 내용의 파일은 중복으로 저장하지 않습니다.')
+ +'<p>휴대폰은 다른 앱으로 이동하거나 화면이 꺼지면 업로드를 멈출 수 있습니다. 이 화면을 열어 두고, 중단되면 돌아와 이어 올려 주세요.</p>'
+ +(failed.length?'<button class="btn sm" data-photo-retry="all" '+(r?.running?'disabled':'')+'>중단된 파일 모두 이어 올리기 ('+failed.length+'개)</button>'+failed.map(({job,i})=>'<div style="margin-top:8px">'+esc(job.file.name)+'<span style="display:block">'+esc(job.error||'업로드 중단')+' · 전송 '+Math.floor((job.resume?.offset||0)/Math.max(1,job.file.size)*100)+'%</span><button class="btn sm" data-photo-retry="'+i+'" '+(r?.running?'disabled':'')+'>이어 올리기</button></div>').join('')+'<p>이 페이지가 열려 있는 동안 중단 파일을 이어 올릴 수 있습니다. 페이지를 닫았으면 파일을 다시 선택해 주세요.</p>':'');
+}
+function retryPhotoFiles(index){
+ const owner=JSON.stringify(cred||{});if(photoUploadRun?.running||!photoState.data?.canUpload)return;
+ const jobs=index==='all'?photoFailedJobs.filter(j=>j.owner===owner):[photoFailedJobs[Number(index)]].filter(j=>j&&j.owner===owner);if(!jobs.length)return;
+ photoFailedJobs=photoFailedJobs.filter(j=>!jobs.includes(j));photoUploadFiles([],jobs);
+}
+async function photoUploadFiles(list,resumeJobs){
+ if(!photoState.data?.canUpload)return;const files=resumeJobs?resumeJobs.map(j=>j.file):Array.from(list||[]);if(!files.length)return;
  const owner=JSON.stringify(cred||{}),folder=photoState.folder;let r=photoUploadRun;
  if(r&&r.running&&r.owner!==owner){toast('이전 계정의 업로드가 끝난 후 다시 추가해 주세요.');return;}
  const items=files.map(f=>({name:f.name,size:f.size,pct:0,text:'대기 중',state:'wait',t0:0}));
  if(!r||!r.running){r={running:true,owner,jobs:[],total:0,done:0,ok:0,skipped:0,bad:0,imagesOnly:true,summary:'',batch:upBegin([])};photoUploadRun=r;r.batch.photoQueue=true;}
- r.batch.items.push(...items);r.total+=files.length;r.jobs.push(...files.map(file=>({file,folder})));if(files.some(f=>/\.(mp4|mov)$/i.test(f.name)))r.imagesOnly=false;
+ r.batch.items.push(...items);r.total+=files.length;r.jobs.push(...(resumeJobs||files.map(file=>({file,folder,owner,resume:{}}))));if(files.some(f=>/\.(mp4|mov)$/i.test(f.name)))r.imagesOnly=false;
  if(upBatch!==r.batch){upBatch=r.batch;clearTimeout(upHideT);}upPaint();paintPhotoQueueStatus();
- if(!r.promise)r.promise=drainPhotoUploads(r);return r.promise;
+ photoKeepAwake();if(!r.promise)r.promise=drainPhotoUploads(r);return r.promise;
 }
 async function drainPhotoUploads(r){
  while(r.jobs.length){
-  const job=r.jobs.shift(),f=job.file;paintPhotoQueueStatus();let index=-1;
+  const job=r.jobs.shift(),f=job.file;r.current=job;paintPhotoQueueStatus();let index=-1;
   try{
    if(JSON.stringify(cred||{})!==r.owner)throw Error('로그인 계정이 바뀌어 업로드하지 않았습니다');
    if(!/\.(jpe?g|png|gif|webp|heic|mp4|mov)$/i.test(f.name))throw Error('사진 또는 MP4·MOV 영상을 선택해 주세요');
    if(!f.size||f.size>MAX_MB*1024*1024)throw Error(sizeLimitText()+' 이하의 파일을 선택해 주세요');
    if(upBatch!==r.batch)upBatch=r.batch;
    index=r.batch.items.findIndex(x=>x.name===f.name&&x.size===f.size&&x.state==='wait');
-   const upload=await toUpload(f);
+   job.progressIndex=index;const upload=job.upload||(job.upload=await toUpload(f,job.resume));
    if(JSON.stringify(cred||{})!==r.owner)throw Error('로그인 계정이 바뀌어 업로드하지 않았습니다');
    const result=await call('photoUpload',{folder:job.folder,upload});
    upDone(f);if(result&&result.duplicate){r.skipped++;if(index>=0)upSet(index,{text:'동일한 파일이 있어 건너뜀',state:'ok',pct:100});}else r.ok++;
-  }catch(e){r.bad++;upDone(f,e.message);}
+  }catch(e){r.bad++;if(job.upload?.staged&&/올린 파일을 찾지|시간.*지났/.test(e.message)){job.upload=null;job.resume={};}job.error=e.message;if(!photoFailedJobs.includes(job))photoFailedJobs.push(job);upDone(f,e.message);}
   r.done++;paintPhotoQueueStatus();
  }
- r.running=false;const unit=r.imagesOnly?'장':'개';r.summary=r.ok+unit+' 저장'+(r.skipped?' · '+r.skipped+'개 중복 건너뜀':'')+(r.bad?' · '+r.bad+'개 실패':'');
+ r.running=false;r.current=null;if(photoUploadRun===r)photoReleaseAwake();const unit=r.imagesOnly?'장':'개';r.summary=r.ok+unit+' 저장'+(r.skipped?' · '+r.skipped+'개 중복 건너뜀':'')+(r.bad?' · '+r.bad+'개 실패':'');
  if(upBatch===r.batch)upEnd(r.summary);paintPhotoQueueStatus();photoCache.clear();
  if(tab==='photos'&&JSON.stringify(cred||{})===r.owner)await loadPhotos(photoState.folder);
 }
@@ -2184,7 +2204,7 @@ $('#main').addEventListener('change',e=>{if(e.target.id==='photoMediaFilter'){ph
 $('#main').addEventListener('input',e=>{if(e.target.id!=='photoQuery')return;photoQuery=e.target.value;const pos=e.target.selectionStart;paintPhotos();const input=$('#photoQuery');if(input){input.focus();input.setSelectionRange(pos,pos);}});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-photo-view],[data-photo-prev],[data-photo-next],[data-photo-dl]');if(!b)return;const x=b.dataset;if(x.photoDl)return drvDownload('photos',x.photoDl);return photoViewer(x.photoView||x.photoPrev||x.photoNext);});
 $('#main').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const x=b.dataset;
- if(x.photoFolder!==undefined)return loadPhotos(x.photoFolder);if(x.photoRefresh!==undefined){photoCache.clear();return loadPhotos(photoState.folder);}if(x.photoSetup!==undefined)return photoSetupDlg();if(x.photoAlbum!==undefined)return photoAlbumDlg();if(x.photoPick!==undefined||x.photoDropPick!==undefined)return $('#photoFiles')?.click();if(x.photoMore!==undefined){photoState.limit+=60;return paintPhotos();}
+ if(x.photoRename)return photoRenameDlg(x.photoRename);if(x.photoRetry!==undefined)return retryPhotoFiles(x.photoRetry);if(x.photoFolder!==undefined)return loadPhotos(x.photoFolder);if(x.photoRefresh!==undefined){photoCache.clear();return loadPhotos(photoState.folder);}if(x.photoSetup!==undefined)return photoSetupDlg();if(x.photoAlbum!==undefined)return photoAlbumDlg();if(x.photoPick!==undefined||x.photoDropPick!==undefined)return $('#photoFiles')?.click();if(x.photoMore!==undefined){photoState.limit+=60;return paintPhotos();}
  if(x.photoDefault!==undefined){b.disabled=true;try{await call('photoSetup',{create:true});await loadPhotos('');}catch(e){toast(e.message);b.disabled=false;}}
 });
 $('#main').addEventListener('change',e=>{if(e.target.id==='photoFiles'){const files=Array.from(e.target.files||[]);e.target.value='';photoUploadFiles(files);}});
