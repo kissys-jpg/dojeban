@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="b4d6667">
+<meta name="dj-build" content="9399feb">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -526,7 +526,7 @@ function setBusy(d){ busy += d; $("#loading").hidden = busy <= 0; }
 function callRaw(action, payload, c, withLoad){
   setBusy(1);
   return new Promise((res, rej) => {
-    google.script.run.withSuccessHandler(r => { setBusy(-1); if(r&&r.loginRequired!==undefined)lsSet("dj.login.required",r.loginRequired?"true":"false");if (r && r.ok) res(r); else rej(Object.assign(new Error(r && r.error || "응답이 없습니다"),{loginRequired:!!(r&&r.loginRequired),studentLoginRequired:!!(r&&r.studentLoginRequired)})); })
+    google.script.run.withSuccessHandler(r => { setBusy(-1); if(r&&r.loginRequired!==undefined)lsSet("dj.login.required",r.loginRequired?"true":"false");if (r && r.ok) res(r); else rej(Object.assign(new Error(r && r.error || "응답이 없습니다"),{loginRequired:!!(r&&r.loginRequired),studentLoginRequired:!!(r&&r.studentLoginRequired),choices:r&&r.choices})); })
       .withFailureHandler(e => { setBusy(-1); rej(new Error("연결이 끊겼습니다. 잠시 후 다시 시도해 주세요.")); })
       .api({ action, payload: payload || {}, cred: c || cred, withLoad: !!withLoad });
   });
@@ -636,19 +636,22 @@ function gate(msg){
     <div class="row">${[["student","학생"],["teacher","선생님"]].map(([k,l]) => `<button class="chipbtn" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
     <form id="loginForm" class="panel pad" style="display:flex;flex-direction:column;gap:12px">
       ${mode === "student" ? `
-        <label class="fld"><span>학번</span><input type="text" id="lg-name" inputmode="numeric" autocomplete="username" required maxlength="30" placeholder="예: 20313" value="${esc(lsGet("dj.student.id") || "")}"></label>
+        <label class="fld"><span>이름 또는 학번</span><input type="text" id="lg-name" autocomplete="username" required maxlength="30" placeholder="예: 홍길동 또는 20313" value="${esc(lsGet("dj.student.id") || "")}"></label>
         <label class="fld"><span>비밀번호 (처음에는 학번)</span><input type="password" id="lg-pin" autocomplete="current-password" required maxlength="64"></label>`
       : `<label class="fld"><span>교사 이름</span><input type="text" id="lg-teacher-name" autocomplete="username" maxlength="30" value="${esc(lsGet("dj.teacher.name")||"")}"></label><label class="fld"><span>선생님 비밀번호</span><input type="password" id="lg-pw" autocomplete="current-password" required></label>`}
       <label class="check"><input type="checkbox" id="lg-keep"> 내 로그인 정보 저장 (이 기기)</label>
       <button class="btn pri" type="submit">들어가기</button>
     </form>
     ${lsGet("dj.login.required")==="false"||(D&&isGuest()&&D.guestView)?'<button class="btn ghost" type="button" id="guestBrowse">로그인 없이 둘러보기</button>':""}
-    <p style="font-size:13px">1~3학년 3반 학생은 학번과 비밀번호로 로그인하세요. 초기 비밀번호는 학번(예: 20313)입니다. 홈 화면에 추가하면 앱처럼 열 수 있습니다.</p></div>`;
+    <p style="font-size:13px">1~3학년 3반 학생은 이름(또는 학번)과 비밀번호로 로그인하세요. 초기 비밀번호는 학번(예: 20313)입니다. 홈 화면에 추가하면 앱처럼 열 수 있습니다.</p></div>`;
   if($("#guestBrowse"))$("#guestBrowse").onclick = () => enterGuest();
   $("#gate").querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { lsSet("dj.mode", b.dataset.mode); gate(); });
+  let pick="";
+  /* 이름으로 로그인했는데 같은 이름이 여럿이면, 그때 본인을 고르는 창을 띄웁니다(입력한 비밀번호는 그대로 사용). */
+  const pickDlg=(msg,choices)=>{let d=document.getElementById("pickDlg");if(d)d.remove();d=document.createElement("dialog");d.id="pickDlg";d.innerHTML=`<form method="dialog" class="pad" style="display:flex;flex-direction:column;gap:10px;min-width:260px"><h3 style="margin:0">같은 이름의 학생이 있습니다</h3><p class="ev-s" style="margin:0">${esc(msg)}</p>${choices.map(x=>`<button class="btn" type="button" data-pick="${esc(x.studentId)}">${esc(x.klass)} ${esc(x.no)}번 (${esc(x.studentId)})</button>`).join("")}<p class="ev-s" style="margin:0">한 번 고르면 이 기기에 저장되어 다음부터는 바로 들어갑니다.</p><button class="btn ghost" value="cancel">취소</button></form>`;document.body.appendChild(d);d.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{pick=b.dataset.pick;d.close();d.remove();$("#loginForm").querySelector("[type=submit]").click();});d.addEventListener("close",()=>{if(d.isConnected)d.remove();});if(d.showModal)d.showModal();else d.setAttribute("open","");};
   $("#loginForm").onsubmit = async e => {
     e.preventDefault();
-    const c = mode === "student" ? { name: $("#lg-name").value.trim(), pin: $("#lg-pin").value.trim() } : { teacherName:$("#lg-teacher-name").value.trim(),teacher: $("#lg-pw").value };
+    const c = mode === "student" ? { name: $("#lg-name").value.trim(), pin: $("#lg-pin").value.trim(), ...(pick?{pick}:{}) } : { teacherName:$("#lg-teacher-name").value.trim(),teacher: $("#lg-pw").value };
     try {
       const login=await call("login",{remember:$("#lg-keep").checked},c),authCred=login.session?{session:login.session}:c;
       const data = await call("load", {deferLinks:true,homeOnly:true}, authCred);
@@ -658,7 +661,7 @@ function gate(msg){
       if (c.name) { lsSet("dj.name", data.me.name);if(data.me.studentId)lsSet("dj.student.id",data.me.studentId); }if(c.teacherName)lsSet("dj.teacher.name",c.teacherName);
       $("#gate").hidden = true; $("#shell").hidden = false;
       setData(data);
-    } catch (err) { gate(err.message); }
+    } catch (err) { if(err.choices&&err.choices.length&&mode==="student"&&!pick){pickDlg("본인을 골라 주세요.",err.choices);return;} pick=""; gate(err.message); }
   };
 }
 function logout(msg){journalData=null;journalError="";journalActor="";rosterSelected.clear(); if(cred&&cred.session)call("logoutSession",{token:cred.session}).catch(()=>{});try{sessionStorage.removeItem("dj.session");}catch{}fullLoadEpoch++;fullLoadPending=null;fullLoadError=""; clearGlobalSearch(); todayDriveNews.clear();todayNewsOwner="";resourceLinkEpoch++;resourceLinkPending=null; if (D && D.loginDisabled) return reload(); const guestOk = Boolean(D && D.guestView); cred = null; D = null; noticeImages.clear(); noticeImagesPending.clear(); lsSet("dj.cred", null); lsSet(HOME_KEY, null); if (guestOk && !msg) return enterGuest(); gate(msg); }
@@ -839,7 +842,7 @@ const targetChip = t => !t || t === "all" ? `<span class="chip">전체</span>` :
 const groupChip = g => `<span class="chip ${g}">${esc(GROUP[g] || g)}</span>`;
 function afterCalendarEvents(){
   const out=[],common=new Map();
-  D.afterschool.forEach(a=>{const g=GRADE_GROUP[a.grade];if(!T()&&!isGuest()&&(!D.me.afterschool||g!==myGroup()))return;
+  D.afterschool.forEach(a=>{const g=GRADE_GROUP[a.grade]; /* 학생도 선생님과 같은 달력(전 학년 방과후) */
     const e={id:"aft"+a.date+a.grade+a.title,title:a.info?a.title:"방과후 "+a.grade+"학년 · "+a.title,shortTitle:a.info?a.title:"방("+a.grade+") "+a.title,kind:"AFT",src:"sheet",date:a.date,time:a.info?"":a.start+"–"+a.end,target:g,srcLabel:"방과후 일정표 · "+a.grade+"학년"};
     if(!a.info){out.push(e);return;}
     const key=JSON.stringify([a.date,String(a.title||"").replace(/\s+/g,"")]);const prior=common.get(key);
@@ -883,7 +886,7 @@ function allEvents(){
   D.events.forEach(e => out.push({ ...e, src: "app" }));
   if (T()) (D.calendarEvents || []).forEach(e => out.push({ ...e, src: "calendar" }));
   out.push(...afterCalendarEvents());
-  if (T() || matches(D.common.target, myGroup())) D.common.items.forEach((e, i) => out.push({ ...e, id: "sc" + i, src:"sheet", kind: "EVT", target: D.common.target, srcLabel: "학생별 일정표 · 공통" + (e.monthOnly ? " (날짜 미정)" : "") }));
+  D.common.items.forEach((e, i) => out.push({ ...e, id: "sc" + i, src:"sheet", kind: "EVT", target: D.common.target, srcLabel: "학생별 일정표 · 공통" + (e.monthOnly ? " (날짜 미정)" : "") }));
   if (isLearner()) (D.assigns || []).forEach(a => ojtDays(a, addDays(TODAY, -62), 200).forEach(e => out.push(e)));
   if (!T() || showPersonal){
     D.personalApp.forEach(e => out.push({ ...e, kind: "PER", target: "all", src: "pe", title: `[${e.name}] ${e.title}`, srcLabel: "학생 개인일정 · " + e.name }));
@@ -1010,7 +1013,7 @@ function todayActionItems(){
  }else{
   (D.portfolio||[]).filter(p=>p.status==="보완요청"||p.status==="보완").forEach(p=>push("portfolio",p.id,p.title,"포트폴리오 보완 요청 · 피드백 확인",0));
   (D.experienceIntros||[]).filter(i=>i.status==="보완요청").forEach(i=>push("intro",i.id,"직무체험 자기소개 보완",i.companyName,0));
-  (D.notices||[]).filter(n=>(!n.due||n.due>=TODAY)&&!(D.myAcks||[]).includes(n.id)).forEach(n=>push("notice",n.id,n.title,n.due?"공지 확인 · "+fmtMD(n.due)+"까지":"아직 확인하지 않은 공지",2,n.due));
+  (D.notices||[]).filter(n=>(!n.due||n.due>=TODAY)&&matches(n.target,myGroup())&&!(D.myAcks||[]).includes(n.id)).forEach(n=>push("notice",n.id,n.title,n.due?"공지 확인 · "+fmtMD(n.due)+"까지":"아직 확인하지 않은 공지",2,n.due));
  }
  (D.tasks||[]).filter(t=>!t.done&&projects.has(t.project)&&!["완료","중지"].includes(projects.get(t.project).status)&&(T()||!t.assignee||t.assignee===D.me.name)).forEach(t=>push("task",t.id,t.title,(t.due?(t.due<TODAY?"마감 지남 · ":t.due===TODAY?"오늘 마감 · ":"")+fmtMD(t.due)+"까지 · ":"마감 미정 · ")+projects.get(t.project).team,t.due&&t.due<=TODAY?0:1,t.due));
  return items.sort((a,b)=>a.priority-b.priority||String(a.date).localeCompare(String(b.date))).slice(0,20);
@@ -1254,7 +1257,7 @@ function vToday(){
       <div class="stat"><div class="v">${(D.anonPosts || []).length}</div><div class="k">익명게시글</div></div>
       <div class="stat"><div class="v">${D.purchases.filter(p => p.state === "요청").length}</div><div class="k">새 구매요청</div></div></div>`;
   } else if(!T()&&!isGuest()) {
-    const un = D.notices.filter(n => (!n.due||n.due>=TODAY)&&!D.myAcks.includes(n.id)).length;
+    const un = D.notices.filter(n => (!n.due||n.due>=TODAY)&&matches(n.target,myGroup())&&!D.myAcks.includes(n.id)).length;
     if (un) h += `<div class="banner row"><span>확인하지 않은 공지 ${un}건</span><span class="spacer"></span><button class="btn sm" data-go="notices">공지 보기</button></div>`;
 
   }
@@ -1336,7 +1339,7 @@ function noticeCard(n){
     if(D.homeOnly)foot='<button class="btn sm" data-home-details>확인 현황·공지 관리 불러오기</button>';
     if (!D.homeOnly&&openReaders.has(n.id)) { const un = targets.filter(r => !seen.some(a => a.name === r.name)).map(r => r.name);
       foot += `<div class="readers"><b>확인</b> ${seen.length ? seen.map(a => `${esc(a.name)} <span class="num">${esc(a.at.slice(5))}</span>`).join(" · ") : "없음"}<br><b>미확인</b> ${un.length ? esc(un.join(", ")) : "없음"}</div>`; }
-  } else foot = isGuest() ? "" : D.myAcks.includes(n.id) ? `<span class="ack-ok">✓ 확인함</span>` : `<div><button class="btn sm pri" data-ack="${esc(n.id)}">확인했어요</button></div>`;
+  } else foot = isGuest()||!matches(n.target,myGroup()) ? "" : D.myAcks.includes(n.id) ? `<span class="ack-ok">✓ 확인함</span>` : `<div><button class="btn sm pri" data-ack="${esc(n.id)}">확인했어요</button></div>`;
   return `<article class="notice"><div class="row">${n.pinned ? '<span class="chip pin">고정</span>' : ""}${targetChip(n.target)}<span class="meta">${esc(n.at)}${n.due ? ` · 기한 ${esc(fmtMD(n.due))}` : ""}</span></div>
     ${shareButton("notice",n.id)}<h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeExtras(n)}${foot}</article>`;
 }
@@ -1391,9 +1394,8 @@ function vSchedule(){
 }
 function weekStart(s){ const d = parse(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); }
 function vAfter(){
-  if(!T()&&!isGuest()&&!D.me.afterschool)return schedHead()+`<section class="panel">${emptyBox('방과후 미참여','학교·일반 일정은 달력에서 확인하세요.')}</section>`;
   const ws = aftWeek || weekStart(TODAY), days = Array.from({length: 6}, (_, i) => addDays(ws, i));
-  const grades = T()||isGuest() ? [1,2,3] : [GROUP_GRADE[myGroup()]];
+  const grades = [1,2,3];
   const items = D.afterschool.filter(a => a.date >= ws && a.date <= days[5]);
   const body = !D.afterschool.length ? `<section class="panel">${emptyBox("방과후 일정표를 읽지 못했습니다", T() ? "Code.gs의 TAB_AFTER 탭 이름을 확인하세요." : "")}</section>`
     : grades.map(g => {
