@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="7e74fdf">
+<meta name="dj-build" content="14500c0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -311,6 +311,7 @@ body{margin:0} [hidden]{display:none!important}
 .notice-photo{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px;min-height:110px;cursor:zoom-in;overflow:hidden}
 .notice-photo img{max-width:100%;width:100%;height:200px;object-fit:contain}
 .notice-full-photo{display:block;max-width:100%;height:auto}
+.pick-thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none}
 .notice-attachments{display:grid;gap:8px;border-top:1px solid var(--line);padding:10px 0;margin-top:10px}
 .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}
 .photo-grid.albums{margin-top:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
@@ -1105,15 +1106,25 @@ $('#main').addEventListener('click',e=>{const b=e.target.closest('button');if(!b
 /* 프로젝트 게시판: 프로젝트·자격증 내용과 자료 공유 */
 let projSub=null,boardOpen=null,boardFilter='프로젝트',boardQuery='',boardDraftFiles=[];
 function boardList(){const q=boardQuery.trim().toLowerCase();return [...(D.boardPosts||[])].filter(p=>(p.category===boardFilter)&&[p.title,p.subject,p.body].join(' ').toLowerCase().includes(q)).sort((a,b)=>String(b.updated).localeCompare(String(a.updated)));}
-function boardFilesHtml(files){return (files||[]).map(f=>'<div class="row" style="margin-top:8px"><span style="flex:1;overflow-wrap:anywhere">'+esc(f.name)+' <small class="muted">'+fmtSize(f.size)+'</small></span><button class="btn sm" data-file="'+esc(f.id)+'">받기</button>'+documentPreviewButton(f,'file')+'</div>').join('');}
-/* 프로젝트: 공유 게시판(전체 공개)과 우리 팀(구성원 전용 과제·자료함)을 한 메뉴로 */
+const isImageFile = f => /^image\/(png|jpeg|gif|webp)$/.test(String(f.mime||"")) || /\.(png|jpe?g|gif|webp)$/i.test(String(f.name||""));
+ 
+function fileGalleryHtml(files){const imgs=(files||[]).filter(isImageFile);return imgs.length?'<div class="notice-gallery">'+imgs.map(f=>'<button type="button" class="notice-photo" data-document-preview="file|'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기"><img data-file-img="'+esc(f.id)+'" alt="'+esc(f.name)+'" hidden><span class="ev-s" data-file-img-status>사진 불러오는 중…</span></button>').join('')+'</div>':'';}
+const fileImages = new Map(), fileImagesPending = new Map(); let fileImageObserver = null;
+function fileImageData(id){if(fileImages.has(id))return Promise.resolve(fileImages.get(id));if(fileImagesPending.has(id))return fileImagesPending.get(id);const req=call('downloadFile',{id}).then(f=>{const src='data:'+f.mime+';base64,'+f.base64;if(fileImages.size>=30)fileImages.delete(fileImages.keys().next().value);fileImages.set(id,src);return src;}).finally(()=>fileImagesPending.delete(id));fileImagesPending.set(id,req);return req;}
+function hydrateFileImages(){
+ if(fileImageObserver)fileImageObserver.disconnect();
+ fileImageObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting)return;const img=entry.target.querySelector('[data-file-img]');fileImageObserver.unobserve(entry.target);if(!img)return;fileImageData(img.dataset.fileImg).then(src=>{if(!img.isConnected)return;img.src=src;img.hidden=false;const st=img.parentElement.querySelector('[data-file-img-status]');if(st)st.hidden=true;}).catch(()=>{if(!img.isConnected)return;const st=img.parentElement.querySelector('[data-file-img-status]');if(st)st.textContent='사진 보기 · 원본 받기';});}),{rootMargin:'100px'});
+ document.querySelectorAll('#main [data-file-img]').forEach(img=>fileImageObserver.observe(img.parentElement));
+}
+function boardFilesHtml(files){return fileGalleryHtml(files)+(files||[]).map(f=>'<div class="row" style="margin-top:8px"><span style="flex:1;overflow-wrap:anywhere">'+esc(f.name)+' <small class="muted">'+fmtSize(f.size)+'</small></span><button class="btn sm" data-file="'+esc(f.id)+'">받기</button>'+documentPreviewButton(f,'file')+'</div>').join('');}
+ 
 function projHubBar(){return '';}
 function vMaterialsSub(){return vMaterials();}
 function rosterBar(){return '';}
 function vRosterSub(){return vRoster();}
 function vRegisterSub(){return vRegister();}
 function vContestTop(){ return boardOpen ? vBoard() : vContests(); }
-/* 자격증: 종목별 일정·자료실·준비 게시글 */
+ 
 let certSelected='',certView='schedule';
 const CERT_PHASES = ['필기 접수','필기 시험','실기 접수','실기 시험','시험 접수','시험','합격 발표','준비 수업','기타'];
 const certCurrent=()=> (D.certifications||[]).find(c=>c.id===certSelected);
@@ -1209,7 +1220,7 @@ function bindBoardComment(){const f=$('#boardCommentForm');if(!f)return;f.onsubm
 $('#main').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const x=b.dataset;if(x.freq)return folderReqDlg(x.freq,x.freqLabel||'폴더');if(x.freqOk){b.disabled=true;return act('decideFolderAccess',{id:x.freqOk,approve:true},'공유했습니다');}if(x.freqNo){if(!arm(b,'fq'+x.freqNo))return;return act('decideFolderAccess',{id:x.freqNo,approve:false},'거절했습니다');}if(x.contestPost){go('contest');boardOpen=x.contestPost;return render();}if(x.contestNew!==undefined)return boardDlg({category:'대회',status:'준비'});if(x.goContests!==undefined){boardOpen=null;return go('contest');}if(x.contestCalendar){const p=(D.boardPosts||[]).find(p=>p.id===x.contestCalendar),date=p&&(p.date||p.applyEnd||p.applyStart);if(date){calSel=date;calMonth=parse(date);calMonth.setDate(1);}schedMode='cal';return go('schedule');}if(x.projsub){boardOpen=null;if(x.projsub==='materials'||x.projsub==='tools')return go(x.projsub);projSub=x.projsub;return go('projects');}if(x.certNew!==undefined)return boardDlg({category:'자격증',status:'준비'});if(x.projShare){const p=D.projects.find(q=>q.id===x.projShare);if(p)return boardDlg({category:'프로젝트',status:'진행 중',subject:p.team+' · '+p.product});return;}if(x.boardNew!==undefined)return boardDlg();if(x.boardOpen){boardOpen=x.boardOpen;return render();}if(x.boardBack!==undefined){boardOpen=null;return render();}if(x.boardFilter){boardFilter=x.boardFilter;return render();}if(x.boardEdit)return boardDlg((D.boardPosts||[]).find(p=>p.id===x.boardEdit));if(x.boardDelete){if(!arm(b,x.boardDelete))return;return act('deleteBoard',{id:x.boardDelete},'게시글을 목록에서 삭제했습니다');}if(x.boardCommentDelete){if(!arm(b,x.boardCommentDelete))return;return act('deleteBoardComment',{id:x.boardCommentDelete},'댓글을 삭제했습니다');}});
 $('#main').addEventListener('input',e=>{if(e.target.id==='boardQuery'){boardQuery=e.target.value;const pos=e.target.selectionStart;render();const q=$('#boardQuery');if(q){q.focus();q.setSelectionRange(pos,pos);}}});
 
-/* ---------- 오늘 ---------- */
+ 
 function todayNoticeRow(n){
  return `<details class="today-notice" name="today-notices" data-today-notice="${esc(n.id)}"><summary title="${esc(n.title)}"><span class="today-notice-title">${esc(n.title)}</span><time class="meta">${esc(String(n.at||"").slice(5,10).replace('-','/'))}</time><span class="today-notice-arrow" aria-hidden="true">▸</span></summary><div data-today-notice-content></div></details>`;
 }
@@ -1329,7 +1340,7 @@ $('#main').addEventListener('click',async e=>{
 });
 $('#main').addEventListener('input',e=>{if(e.target.id!=='noticeQuery')return;noticeQuery=e.target.value;const pos=e.target.selectionStart;render();const input=$('#noticeQuery');if(input){input.focus();input.setSelectionRange(pos,pos);}});
 
-/* ---------- 공지 ---------- */
+ 
 const sortedNotices = () => [...D.notices].sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0) || String(b.at).localeCompare(String(a.at)));
 function noticeCard(n){
   let foot = "";
@@ -1367,11 +1378,11 @@ function isCalendarHoliday(date,events){
  if(["01-01","03-01","05-05","06-06","08-15","10-03","10-09","12-25"].includes(date.slice(5)))return true;
  return (events||[]).some(isHolidayEvent);
 }
-/* 일정 메뉴의 훈련시간만 숨깁니다. 원본·오늘·훈련 전용 시간표는 유지합니다. */
+ 
 function isScheduleTrainingTime(e){
   const k=String(e.kind||"").toUpperCase().replace(/[\s_-]/g,"");
   if(["OJT","OFF","OFFJT"].includes(k))return true;
-  /* 구글 캘린더에서 일반 일정으로 읽힌 훈련시간도 구분합니다. */
+   
   const title=String(e.title||"").trim();
   return /^(?:\[|\()?\s*(?:OJT|OFF[\s-]*JT)\s*(?:\]|\))?(?=$|[\s·:：-]|훈련|수업|실습)/i.test(title)
     && (Boolean(e.time)||/훈련|수업|실습/.test(title)||/^(?:\[|\()?\s*(?:OJT|OFF[\s-]*JT)\s*(?:\]|\))?$/i.test(title));
@@ -1414,7 +1425,7 @@ function vAfter(){
   return `${schedHead()}<div class="row"><button class="btn sm" data-aftweek="-7" aria-label="이전 주">‹</button><b class="num">${esc(fmtMD(ws))} ~ ${esc(fmtMD(days[4]))}</b><button class="btn sm" data-aftweek="7" aria-label="다음 주">›</button><span class="spacer"></span><button class="btn sm ghost" data-aftweek="0">이번 주</button></div>${body}`;
 }
 
-/* ---------- 요청함 ---------- */
+ 
 const reqChip = s => `<span class="chip ${s === "완료" ? "ok" : s === "처리중" ? "learner" : "pre"}">${esc(s || "접수")}</span>`;
 function vRequests(){
   if (reqOpen){
@@ -1481,8 +1492,8 @@ function vTraining(){
     <section class="panel"><div class="pad row"><span class="label">훈련 기업</span><span class="spacer"></span><button class="btn sm pri" data-co-new>+ 기업</button></div>
       ${(D.companies || []).length ? D.companies.map(c => `<div class="att"><div class="who"><b>${esc(c.name)}</b><small>${esc(c.mentor ? "기업현장교사 " + c.mentor : "기업현장교사 미등록")}${c.phone ? " · " + esc(c.phone) : ""}${c.address ? " · " + esc(c.address) : ""}</small><small>배정 ${(D.assigns || []).filter(a => a.company === c.id).map(a => esc(a.name)).join(", ") || "없음"}</small></div><div class="row"><button class="btn sm" data-co-edit="${esc(c.id)}">수정</button><button class="btn sm ghost danger" data-co-del="${esc(c.id)}">삭제</button></div></div>`).join("") : emptyBox("등록된 훈련 기업이 없습니다")}</section>`;
 }
-/* ---------- 기업정보 ---------- */
-/* 기업정보와 직무체험 준비 */
+ 
+ 
 let companySub='info',companySelected='';
 const INTRO_FIELDS={jobInterest:['관심 직무','기업에서 관심 있는 부서·직무나 기술 분야를 적어 주세요.'],headline:['나를 소개하는 한 문장','내 특징과 관심 직무를 한 문장으로 적어 주세요.'],motivation:['관심을 갖게 된 이유','이 직무에 관심을 갖게 된 실제 경험을 적어 주세요.'],strength:['나의 강점과 근거','강점을 보여 주는 행동, 상황, 결과를 적어 주세요.'],experience:['프로젝트 및 실습 경험','활동명, 나의 역할, 사용 도구, 어려움과 해결 과정, 결과를 구분해 적어 주세요.'],skills:['배운 기술과 자격증','직접 해 본 기술과 취득·준비 중인 자격증을 구분해 주세요.'],teamSafety:['협업 및 안전 태도','약속 준수, 협업, 문제 보고, 보호구 착용 등의 경험을 적어 주세요.'],goals:['직무체험에서 배우고 싶은 것','알아보고 싶은 업무와 기업에 묻고 싶은 질문을 적어 주세요.'],portfolio:['포트폴리오 링크','기업에 보여 줄 수 있는 노션·Drive 작업물 링크를 넣어 주세요.'],schoolGrade:['학교·학과·학년','예: 경기항공고 로봇자동화과 2학년'],course:['참여 예정 과정','담당교사에게 안내받은 과정명. 아직 모르겠으면 미정'],skillIndependent:['혼자 가능한 도구·작업','직접 해 본 것만 적으세요. 없으면 없음'],skillGuided:['시범 후 가능한 도구·작업','예: 교사 시범 후 기본 PLC 입출력 배선'],skillNew:['아직 경험 없는 도구·작업','처음이라 기업에서 배우고 싶은 작업'],commute:['통근 방법·시간과 기숙사','예: 버스 약 40분, 기숙사 불필요. 상세 주소는 쓰지 마세요.'],availability:['참여 가능한 일정','가능한 날짜·시간, 학교와 조정할 사항. 미정이면 미정']};
 function vCompany(){
@@ -1721,7 +1732,7 @@ function anonDlg(){
     async fd => { if (!ANON_GROUPS[fd.category]) { toast('글 구분을 선택해 주세요'); return false; } try { const uploads = await readDraftUploads(); return await act("anonPost", { ...fd, uploads }, "올렸습니다"); } catch (e) { toast(e.message); return false; } });
 }
 
-/* ---------- 구매요청 ---------- */
+ 
 let bomProject="all",bomTeam="all",purchaseLinks=null,purchaseLinksPending=null,purchaseLinksError="";
 function purchaseLinkButtons(){if(purchaseLinks)return [["bom","시트 열기 ↗"],["edufine","에듀파인용 시트 ↗"],["projects","프로젝트별 부품 ↗"]].filter(([k])=>purchaseLinks[k]).map(([k,label])=>'<a class="btn" href="'+esc(purchaseLinks[k])+'" target="_blank" rel="noopener">'+label+'</a>').join('');return purchaseLinksError?'<span class="ev-s">'+esc(purchaseLinksError)+'</span><button class="btn" data-purchase-links-retry>시트 주소 다시 확인</button>':'<button class="btn" disabled>시트 주소 확인 중…</button>';}
 function hydratePurchaseLinks(){if(!D||!T()||tab!=="purchases"||purchaseLinks||purchaseLinksPending||purchaseLinksError)return;purchaseLinksPending=call("purchaseSheetLinks").then(r=>{purchaseLinks=r;}).catch(e=>{purchaseLinksError=e.message;}).finally(()=>{purchaseLinksPending=null;const el=$('#purchaseLinks');if(el)el.innerHTML=purchaseLinkButtons();});}
@@ -1911,10 +1922,10 @@ const extraFile = id => id ? `<button class="btn sm" data-file="${esc(id)}">첨�
 const extraDelete = (key,id) => `<button class="btn sm ghost danger" data-extra-delete="${key}|${esc(id)}">삭제</button>`;
 const extraHead = (title,desc,button='') => `<div class="sec-h"><div><h2>${title}</h2><p>${desc}</p></div>${button}</div>`;
 /* ---------- 파일 올리기 공통: 여러 개 누적, 대화상자 어디에 끌어놓아도 인식, ×로 빼기 ---------- */
-let draftFiles = [], draftMax = 5, dlgDrop = null;
+let draftFiles = [], draftMax = 5, dlgDrop = null; const draftThumbs = new Map();
 function filePicker(max, note){
   draftFiles = []; draftMax = max || 1;
-  return `<div class="panel pad dropzone" id="dropZone" tabindex="0" role="button" aria-label="Google Drive에 올릴 파일 선택 또는 끌어놓기" style="border:2px dashed var(--line);margin:12px 0;text-align:center;cursor:pointer"><b>Google Drive에 올릴 파일 선택</b><div class="ev-s">컴퓨터의 파일을 끌어다 놓거나 눌러서 선택하세요. 저장하면 Google Drive에 업로드됩니다.</div><div class="ev-s">${draftMax > 1 ? `최대 ${draftMax}개 · ` : ""}파일당 ${MAX_MB}MB${note ? " · " + esc(note) : ""}</div><input type="file" id="pickFiles" ${draftMax > 1 ? "multiple" : ""} accept="${FILE_ACCEPT}" hidden></div><div id="pickList"></div>`;
+  return `<div class="panel pad dropzone" id="dropZone" tabindex="0" role="button" aria-label="Google Drive에 올릴 파일 선택 또는 끌어놓기" style="border:2px dashed var(--line);margin:12px 0;text-align:center;cursor:pointer"><b>Google Drive에 올릴 파일 선택</b><div class="ev-s">컴퓨터의 파일을 끌어다 놓거나 눌러서 선택하세요. <b>사진은 복사해서 붙여넣기(Ctrl+V·길게 눌러 붙여넣기)</b>도 됩니다. 저장하면 Google Drive에 업로드됩니다.</div><div class="ev-s">${draftMax > 1 ? `최대 ${draftMax}개 · ` : ""}파일당 ${MAX_MB}MB${note ? " · " + esc(note) : ""}</div><input type="file" id="pickFiles" ${draftMax > 1 ? "multiple" : ""} accept="${FILE_ACCEPT}" hidden></div><div id="pickList"></div>`;
 }
 function addDraftFiles(list){
   const add = Array.from(list || []);
@@ -1929,7 +1940,9 @@ function addDraftFiles(list){
 }
 function renderDraftFiles(){
   const box = form.querySelector("#pickList"); if (!box) return;
-  box.innerHTML = draftFiles.map((f, i) => `<div class="row" style="border-top:1px solid var(--line);padding:6px 0"><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)} <span class="ev-s">${fmtSize(f.size)}</span></span><button type="button" class="btn sm ghost" data-unpick="${i}" aria-label="${esc(f.name)} 빼기">×</button></div>`).join("");
+  draftThumbs.forEach((url, f) => { if (!draftFiles.includes(f)) { URL.revokeObjectURL(url); draftThumbs.delete(f); } });
+  const thumb = f => { if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type || "")) return ""; if (!draftThumbs.has(f)) draftThumbs.set(f, URL.createObjectURL(f)); return `<img class="pick-thumb" src="${draftThumbs.get(f)}" alt="${esc(f.name)} 미리보기">`; };
+  box.innerHTML = draftFiles.map((f, i) => `<div class="row" style="border-top:1px solid var(--line);padding:6px 0">${thumb(f)}<span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)} <span class="ev-s">${fmtSize(f.size)}</span></span><button type="button" class="btn sm ghost" data-unpick="${i}" aria-label="${esc(f.name)} 빼기">×</button></div>`).join("");
 }
 function bindFilePicker(){
   const zone = form.querySelector("#dropZone"), input = form.querySelector("#pickFiles"); if (!zone) return;
@@ -2410,7 +2423,7 @@ function render(){
   if(isGuest())document.querySelectorAll('[data-board-new],[data-cert-new],[data-contest-new],[data-cert-post-new],#boardCommentForm').forEach(e=>e.remove());
   if(SHARE_PAGES.includes(tab))$("#main").insertAdjacentHTML("afterbegin",'<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm ghost" data-copy-menu>이 메뉴 링크 복사</button></div>');
   syncShareAddress();viewerStrip();bindBoardComment();finishNav();
-  hydrateDrives(); hydrateNoticeImages();hydrateResourceLinks();hydratePhotos();hydratePurchaseLinks();hydrateEquipment();
+  hydrateDrives(); hydrateNoticeImages();hydrateFileImages();hydrateResourceLinks();hydratePhotos();hydratePurchaseLinks();hydrateEquipment();
   if (draft !== null && $("#replyText")) $("#replyText").value = draft;
   if (anonDraft !== null && $("#anonText")) $("#anonText").value = anonDraft;
   if (armed){ const b = [...document.querySelectorAll("[data-del],[data-delpe],[data-extra-delete],[data-anon-del],[data-file-del],[data-co-del]")].find(x => (x.dataset.del || x.dataset.extraDelete || x.dataset.anonDel || x.dataset.fileDel || (x.dataset.coDel ? "co|" + x.dataset.coDel : "") || "pe|" + x.dataset.delpe) === armed); if (b){ b.classList.add("armed"); b.textContent = "삭제 확인"; } }
@@ -2463,7 +2476,7 @@ $("#main").addEventListener("click", e => { const b = e.target.closest("[data-lo
 applyLook();
 form.addEventListener("click", e => { const b = e.target.closest("[data-unpick]"); if (b) { draftFiles.splice(Number(b.dataset.unpick), 1); renderDraftFiles(); } });
 dlg.addEventListener("close", () => { dlg.classList.remove('document-preview');dlgDrop = null; documentPreviewTicket++;if(documentPreviewUrl){URL.revokeObjectURL(documentPreviewUrl);documentPreviewUrl=null;} });
-dlg.addEventListener("paste", e=>{if(!dlg.open||!dlgDrop)return;const files=Array.from(e.clipboardData&&e.clipboardData.files||[]);if(files.length){e.preventDefault();dlgDrop(files.map((f,i)=>f.type.startsWith('image/')?new File([f],'붙여넣기-'+Date.now()+'-'+i+'.'+(f.type.split('/')[1]||'png'),{type:f.type}):f));}});
+dlg.addEventListener("paste", e=>{if(!dlg.open||!dlgDrop)return;const cd=e.clipboardData;let files=Array.from(cd&&cd.files||[]);if(!files.length&&cd&&cd.items)files=Array.from(cd.items).filter(x=>x.kind==="file").map(x=>x.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();dlgDrop(files.map((f,i)=>f.type.startsWith('image/')?new File([f],'붙여넣기-'+Date.now()+'-'+i+'.'+(f.type.split('/')[1]||'png'),{type:f.type}):f));}});
 form.addEventListener("click",e=>{const b=e.target.closest('[data-notice-original]');if(b)drvDownload('notice',b.dataset.noticeOriginal);if(e.target.closest('[data-notice-extract-links]')){const text=form.querySelector('[name="body"]').value,box=form.querySelector('[name="linksText"]'),found=text.match(/https:[/][/][^\s<>"']+/g)||[];box.value=[...new Set([...box.value.split(/\r?\n/),...found].map(s=>s.trim().replace(/[.,，。)]+$/g,'')).filter(Boolean))].slice(0,8).join('\n');toast(found.length?'본문의 링크를 가져왔습니다':'본문에 https 링크가 없습니다');}});
 const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
 document.addEventListener("dragover", e => { if (!hasFiles(e)) return; e.preventDefault(); const z = dlg.open && dlgDrop && form.querySelector("#dropZone"); if (z) z.style.borderColor = "var(--accent)"; });
