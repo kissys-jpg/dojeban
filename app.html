@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="958cd5b">
+<meta name="dj-build" content="7e74fdf">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1705,7 +1705,7 @@ function vAnon(){
     const cs = (D.anonComments || []).filter(c => c.post === p.id);
     return `<div class="sec-h"><div><button class="btn sm ghost" data-anon-back>‹ 목록</button></div></div>
       <section class="panel thread"><article class="notice"><div class="row"><span class="chip">${esc(p.label)}</span><span class="chip">${esc(anonGroupLabel(p.category))}</span><span class="chip">${esc(p.status||"접수")}</span>${hid(p)}<span class="meta">${esc(p.at)}</span>${who(p)}</div>
-        <h3>${esc(p.title)}</h3><div class="body">${esc(p.body)}</div><div class="row"><span class="spacer"></span>${tools("post", p)}</div></article>
+        <h3>${esc(p.title)}</h3><div class="body">${esc(p.body)}</div>${(p.files||[]).length ? `<div class="anon-files" aria-label="첨부 사진·파일">${boardFilesHtml(p.files)}</div>` : ""}<div class="row"><span class="spacer"></span>${tools("post", p)}</div></article>
         ${cs.length ? cs.map(c => `<div class="msg ${c.label === "선생님" ? "t" : ""}"><b>${esc(c.label)}${c.mine ? " (나)" : ""}</b> <span class="muted" style="font-size:12.5px">${esc(c.at)}</span>${hid(c)}${who(c)}<p>${esc(c.body)}</p><div class="row"><span class="spacer"></span>${tools("comment", c)}</div></div>`).join("") : `<div class="msg"><span class="muted">아직 댓글이 없습니다. 첫 댓글을 남겨 보세요.</span></div>`}
         <form class="notice" id="anonForm"><label class="fld"><span>댓글 (익명)</span><textarea id="anonText" style="min-height:70px" maxlength="1000" required></textarea></label>
         <div class="row"><span class="spacer"></span><button class="btn pri" type="submit">댓글 달기</button></div></form></section>`;
@@ -1713,12 +1713,12 @@ function vAnon(){
   return `<div class="sec-h"><div><h2>익명게시판</h2><p>요청·질문·상담과 알림판 오류·수정 요청을 한곳에 올려 주세요. 글마다 예비·방과후·학습근로자를 고릅니다.</p></div><button class="btn pri" data-anon-new>+ 글쓰기</button></div>
     <div class="banner" role="note">욕설·비방·개인정보 글은 숨겨질 수 있습니다. 문제가 생기면 대응할 수 있도록 선생님은 작성자를 확인할 수 있어요.${D.loginDisabled ? " (지금은 로그인 없는 테스트 모드라 모든 글이 ‘선생님’으로 표시됩니다. 학생 로그인을 켜면 익명으로 보입니다.)" : ""}</div>
     <div class="row" role="group" aria-label="게시글 구분" style="margin-bottom:12px">${[['all','전체'],...Object.entries(ANON_GROUPS)].map(([k,l]) => `<button class="chipbtn" data-anon-filter="${k}" aria-pressed="${anonFilter===k}">${esc(l)}</button>`).join('')}</div>
-    ${anonReportPanel()}<section class="panel">${posts.length ? posts.map(p => `<button class="listbtn" data-anon-open="${esc(p.id)}"><span class="chip">${esc(anonGroupLabel(p.category))}</span><div><div class="ev-t">${esc(p.title)} <span class="chip">${esc(p.status||"접수")}</span>${hid(p)}</div><div class="ev-s">${esc(String(p.body).slice(0, 60))}${String(p.body).length > 60 ? "…" : ""}</div><div class="ev-s">${esc(p.label)} · ${esc(p.at)} · 댓글 ${p.comments}${p.mine ? " · 내 글" : ""}${T() && p.author ? " · " + esc(p.author) : ""}</div></div></button>`).join("")
+    ${anonReportPanel()}<section class="panel">${posts.length ? posts.map(p => `<button class="listbtn" data-anon-open="${esc(p.id)}"><span class="chip">${esc(anonGroupLabel(p.category))}</span><div><div class="ev-t">${esc(p.title)} <span class="chip">${esc(p.status||"접수")}</span>${hid(p)}</div><div class="ev-s">${esc(String(p.body).slice(0, 60))}${String(p.body).length > 60 ? "…" : ""}</div><div class="ev-s">${esc(p.label)} · ${esc(p.at)} · 댓글 ${p.comments}${(p.files||[]).length ? " · 첨부 " + p.files.length : ""}${p.mine ? " · 내 글" : ""}${T() && p.author ? " · " + esc(p.author) : ""}</div></div></button>`).join("")
       : emptyBox("아직 글이 없습니다", "‘글쓰기’로 첫 글을 올려 보세요.")}</section>`;
 }
 function anonDlg(){
-  openDlg("익명 글쓰기", sel('글 구분','category',[['','구분 선택'],...Object.entries(ANON_GROUPS)],'').replace('name="category"','name="category" required') + field("제목", "title", "", "text", 'required maxlength="80"') + area("내용", "body", "", 3000) + `<p class="ev-s">다른 학생에게는 이름이 보이지 않습니다. 선생님은 작성자를 확인할 수 있습니다.</p>`, "올리기",
-    fd => { if (!ANON_GROUPS[fd.category]) { toast('글 구분을 선택해 주세요'); return false; } return act("anonPost", fd, "올렸습니다"); });
+  openDlg("익명 글쓰기", sel('글 구분','category',[['','구분 선택'],...Object.entries(ANON_GROUPS)],'').replace('name="category"','name="category" required') + field("제목", "title", "", "text", 'required maxlength="80"') + area("내용", "body", "", 3000) + filePicker(5, '익명게시판 Drive 폴더') + `<p class="ev-s">사진·파일은 5개까지 올릴 수 있습니다. 다른 학생에게는 이름이 보이지 않지만 <b>파일 이름과 사진 내용</b>은 보이니, 이름이 들어간 파일명은 바꿔서 올려 주세요. 선생님은 작성자를 확인할 수 있습니다.</p>`, "올리기",
+    async fd => { if (!ANON_GROUPS[fd.category]) { toast('글 구분을 선택해 주세요'); return false; } try { const uploads = await readDraftUploads(); return await act("anonPost", { ...fd, uploads }, "올렸습니다"); } catch (e) { toast(e.message); return false; } });
 }
 
 /* ---------- 구매요청 ---------- */
