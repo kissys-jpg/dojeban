@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="5d9d57c">
+<meta name="dj-build" content="5b64e06">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -141,13 +141,13 @@ a.lnk{color:var(--info);overflow-wrap:anywhere}
 .board-body{line-height:1.85;margin:20px 0;font-size:15px}
 .notice .meta{font-size:12.5px;color:var(--muted)}
 .ack-ok{font-size:13px;color:var(--ok);font-weight:600}
-.consent-box{border:2px solid var(--warn);background:var(--warn-bg);border-radius:14px;padding:14px 16px;margin:12px 0}
+.consent-box{border:2px solid var(--warn);background:var(--warn-bg);border-radius:12px;padding:10px 14px;margin:10px 0}
 .consent-box h4{margin:0 0 6px;font-size:16px;color:var(--warn)}
-.consent-box .consent-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.7;margin:0 0 10px}
+.consent-box .consent-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.5;margin:0 0 8px}
 .consent-box .consent-btns{display:flex;gap:8px;flex-wrap:wrap}
-.consent-box .consent-btns .btn{flex:1 1 140px;min-height:48px;font-size:16px;font-weight:700}
+.consent-box .consent-btns .btn{flex:1 1 120px;min-height:44px;font-size:16px;font-weight:700}
 .consent-box .btn.chosen{outline:3px solid var(--ok);outline-offset:1px}
-.consent-state{font-weight:700;margin:0 0 8px}
+.consent-state{font-weight:700;margin:0 0 4px}
 .consent-banner{border:2px solid var(--warn);background:var(--warn-bg);font-weight:600}
 .consent-badge{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--warn);color:#fff;font-size:12px;font-weight:700;vertical-align:middle}
 .readers{font-size:13px;color:var(--muted);background:var(--sunk);border-radius:8px;padding:8px 10px}
@@ -1032,7 +1032,7 @@ function todayActionItems(){
  }else{
   (D.portfolio||[]).filter(p=>p.status==="보완요청"||p.status==="보완").forEach(p=>push("portfolio",p.id,p.title,"포트폴리오 보완 요청 · 피드백 확인",0));
   (D.experienceIntros||[]).filter(i=>i.status==="보완요청").forEach(i=>push("intro",i.id,"직무체험 자기소개 보완",i.companyName,0));
-  (D.notices||[]).filter(consentPending).forEach(n=>push("notice",n.id,n.title,"영상 게시 동의 · 응답 필요",1));
+  (D.notices||[]).filter(consentPending).forEach(n=>push("notice",n.id,n.title,"초상권 사용 동의 · 응답 필요",1));
   (D.notices||[]).filter(n=>noticeLive(n)&&matches(n.target,myGroup())&&!(D.myAcks||[]).includes(n.id)).forEach(n=>push("notice",n.id,n.title,n.due?"공지 확인 · "+fmtMD(n.due)+"까지":"아직 확인하지 않은 공지",2,n.due));
  }
  (D.tasks||[]).filter(t=>!t.done&&projects.has(t.project)&&!["완료","중지"].includes(projects.get(t.project).status)&&(T()||!t.assignee||t.assignee===D.me.name)).forEach(t=>push("task",t.id,t.title,(t.due?(t.due<TODAY?"마감 지남 · ":t.due===TODAY?"오늘 마감 · ":"")+fmtMD(t.due)+"까지 · ":"마감 미정 · ")+projects.get(t.project).team,t.due&&t.due<=TODAY?0:1,t.due));
@@ -1323,7 +1323,7 @@ function vToday(){
   } else if(!T()&&!isGuest()) {
     const un = D.notices.filter(n => noticeLive(n)&&matches(n.target,myGroup())&&!D.myAcks.includes(n.id)).length;
     const needConsent = (D.notices||[]).filter(consentPending);
-    if (needConsent.length) h += `<div class="banner row consent-banner"><span>📢 <b>영상 게시 동의</b>가 필요한 공지 ${needConsent.length}건</span><span class="spacer"></span><button class="btn sm pri" data-notice-open="${esc(needConsent[0].id)}">지금 동의하기</button></div>`;
+    if (needConsent.length) h += `<div class="banner row consent-banner"><span>📢 <b>초상권 사용 동의</b>가 필요한 공지 ${needConsent.length}건</span><span class="spacer"></span><button class="btn sm pri" data-notice-open="${esc(needConsent[0].id)}">지금 동의하기</button></div>`;
     if (un) h += `<div class="banner row"><span>확인하지 않은 공지 ${un}건</span><span class="spacer"></span><button class="btn sm" data-go="notices">공지 보기</button></div>`;
 
   }
@@ -1341,8 +1341,7 @@ function noticeExtras(n){
  return '<div class="row" style="margin:8px 0"><span class="chip">'+esc(n.category||'일반 안내')+'</span>'+(n.subject?'<span class="ev-s">'+esc(n.subject)+'</span>':'')+(noticeRelationAvailable(n)?'<button class="btn sm ghost" data-notice-related="'+esc(n.id)+'">'+esc(n.relationLabel)+'에서 보기</button>':n.relationLabel?'<span class="ev-s">'+esc(n.relationLabel)+'</span>':'')+'</div>'
  +(n.eventDate?'<div class="row" style="margin:8px 0"><span class="ev-s">일정 '+esc(n.eventDate)+(n.eventEnd&&n.eventEnd!==n.eventDate?' ~ '+esc(n.eventEnd):'')+(n.place?' · '+esc(n.place):'')+'</span><button class="btn sm" data-notice-calendar="'+esc(n.id)+'">달력 보기</button></div>':'')
  +(images.length?'<div class="notice-gallery">'+images.map(f=>'<button type="button" class="notice-photo" data-notice-photo="'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기"><img data-notice-img="'+esc(f.id)+'" alt="'+esc(f.name)+'" hidden><span class="ev-s" data-notice-img-status>사진 불러오는 중…</span></button>').join('')+'</div>':'')
- +youtubeEmbedsHtml(n.body,n.links||[])+videoCardsHtml(files,'notice')
- +((n.links||[]).length?'<div class="row" style="margin:10px 0">'+n.links.map((link,i)=>/#intro$/.test(link)?'<button class="btn pri" data-intro-entry>자기소개서 파일 제출</button>':'<a class="btn sm" href="'+esc(safeUrl(link))+'" target="_blank" rel="noopener noreferrer">관련 링크 '+(i+1)+' ↗</a>').join('')+'</div>':'')
+  +((n.links||[]).length?'<div class="row" style="margin:10px 0">'+n.links.map((link,i)=>/#intro$/.test(link)?'<button class="btn pri" data-intro-entry>자기소개서 파일 제출</button>':'<a class="btn sm" href="'+esc(safeUrl(link))+'" target="_blank" rel="noopener noreferrer">관련 링크 '+(i+1)+' ↗</a>').join('')+'</div>':'')
  +(files.length?'<div class="notice-attachments">'+files.map(f=>'<div class="row"><span style="flex:1;min-width:0;overflow-wrap:anywhere">'+esc(f.name)+' <span class="ev-s">'+fmtSize(f.size)+'</span></span><button class="btn sm" data-notice-file="'+esc(f.id)+'">원본 받기</button>' + documentPreviewButton(f,'notice') + '</div>').join('')+'</div>':'');
 }
 function relatedNotices(relation,label){
@@ -1403,10 +1402,10 @@ function consentBoxHtml(n){
  if(!n.consent)return '';
  let inner='';
  if(T()){const list=n.consents||[],yes=list.filter(c=>c.answer==='동의'),no=list.filter(c=>c.answer==='비동의');
-  inner='<p class="consent-state">동의 '+yes.length+'명 · 동의하지 않음 '+no.length+'명</p><div class="ev-s"><b>동의</b> '+(yes.length?esc(yes.map(c=>c.name).join(', ')):'없음')+'<br><b>동의하지 않음</b> '+(no.length?esc(no.map(c=>c.name).join(', ')):'없음')+'</div>';}
- else if(isGuest())inner='<p class="ev-s">로그인하면 동의 여부를 고를 수 있습니다.</p>';
- else{const a=n.myConsent||'';inner='<p class="consent-state">'+(a==='동의'?'✓ 동의했습니다':a==='비동의'?'동의하지 않았습니다':'아직 응답하지 않았습니다 — 아래에서 골라 주세요')+'</p><div class="consent-btns"><button type="button" class="btn pri'+(a==='동의'?' chosen':'')+'" data-consent-answer="동의" data-consent-notice="'+esc(n.id)+'">✅ 동의합니다</button><button type="button" class="btn'+(a==='비동의'?' chosen':'')+'" data-consent-answer="비동의" data-consent-notice="'+esc(n.id)+'">동의하지 않습니다</button></div><p class="ev-s" style="margin:8px 0 0">언제든 다시 눌러 바꿀 수 있습니다.</p>';}
- return '<section class="consent-box" data-consent-box="'+esc(n.id)+'"><h4>📢 개인정보·영상 게시 동의'+(consentPending(n)?'<span class="consent-badge">응답 필요</span>':'')+'</h4><p class="consent-text">'+esc(n.consent)+'</p>'+inner+'</section>';
+  inner='<p class="consent-state">동의 '+yes.length+' · 비동의 '+no.length+'</p>'+(list.length?'<div class="ev-s">'+(yes.length?'<b>동의</b> '+esc(yes.map(c=>c.name).join(', ')):'')+(yes.length&&no.length?'<br>':'')+(no.length?'<b>비동의</b> '+esc(no.map(c=>c.name).join(', ')):'')+'</div>':'');}
+ else if(isGuest())inner='';
+ else{const a=n.myConsent||'';inner='<div class="consent-btns"><button type="button" class="btn pri'+(a==='동의'?' chosen':'')+'" data-consent-answer="동의" data-consent-notice="'+esc(n.id)+'">'+(a==='동의'?'✓ ':'')+'동의</button><button type="button" class="btn'+(a==='비동의'?' chosen':'')+'" data-consent-answer="비동의" data-consent-notice="'+esc(n.id)+'">'+(a==='비동의'?'✓ ':'')+'비동의</button></div>';}
+ return '<section class="consent-box" data-consent-box="'+esc(n.id)+'"><h4>📢 초상권 사용 동의'+(consentPending(n)?'<span class="consent-badge">응답 필요</span>':'')+'</h4><p class="consent-text">'+esc(n.consent)+'</p>'+inner+'</section>';
 }
 function noticeCard(n){
   let foot = "";
@@ -1420,7 +1419,7 @@ function noticeCard(n){
       foot += `<div class="readers"><b>확인</b> ${seen.length ? seen.map(a => `${esc(a.name)} <span class="num">${esc(a.at.slice(5))}</span>`).join(" · ") : "없음"}<br><b>미확인</b> ${un.length ? esc(un.join(", ")) : "없음"}</div>`; }
   } else foot = isGuest()||!matches(n.target,myGroup()) ? "" : D.myAcks.includes(n.id) ? `<span class="ack-ok">✓ 확인함</span>` : `<div><button class="btn sm pri" data-ack="${esc(n.id)}">확인했어요</button></div>`;
   return `<article class="notice"><div class="row">${n.pinned ? '<span class="chip pin">고정</span>' : ""}${targetChip(n.target)}<span class="meta">${esc(n.at)}${n.due ? ` · 기한 ${esc(fmtMD(n.due))}` : ""}</span></div>
-    ${shareButton("notice",n.id)}<h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${consentBoxHtml(n)}${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeExtras(n)}${foot}</article>`;
+    ${shareButton("notice",n.id)}<h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${youtubeEmbedsHtml(n.body,n.links||[])}${videoCardsHtml(n.files||[],'notice')}${consentBoxHtml(n)}${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeExtras(n)}${foot}</article>`;
 }
 function vNotices(){
  if(noticeOpen){const n=D.notices.find(n=>n.id===noticeOpen);if(n)return '<div class="row" style="margin-bottom:12px"><button class="btn ghost" data-notice-back>‹ 공지 목록으로</button></div><section class="panel">'+noticeCard(n)+'</section>';noticeOpen=null;}
@@ -2704,7 +2703,7 @@ $("#main").addEventListener("click", e => {
   if (d.delst){ const st = D.roster.find(r => String(r.row) === d.delst); if (!st || !arm(t, "st" + d.delst)) return; return act("deleteStudent", { row: st.row, name: st.name }, st.name + " 학생을 명단에서 삭제했습니다 (훈련 기록은 남아 있습니다)"); }
   if (d.readers){ openReaders.has(d.readers) ? openReaders.delete(d.readers) : openReaders.add(d.readers); return render(); }
   if (d.ack) return act("ack", { id: d.ack }, "확인했습니다");
-  if (d.consentAnswer) return act("noticeConsent", { id: d.consentNotice, answer: d.consentAnswer }, d.consentAnswer === "동의" ? "동의했습니다. 고맙습니다" : "동의하지 않음으로 저장했습니다");
+  if (d.consentAnswer) return act("noticeConsent", { id: d.consentNotice, answer: d.consentAnswer }, d.consentAnswer === "동의" ? "동의로 저장했습니다" : "비동의로 저장했습니다");
   if (d.del){ if (!arm(t, d.del)) return; const [tabName, id] = d.del.split("|"); return act("deleteRow", { tab: tabName, id }, "삭제했습니다"); }
   if (d.delpe){ if (!arm(t, "pe|" + d.delpe)) return; return act("delPersonal", { id: d.delpe }, "삭제했습니다"); }
   if (d.dfile) return downloadDrive(d.dfile);
