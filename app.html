@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="5b64e06">
+<meta name="dj-build" content="d289747">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -328,6 +328,13 @@ body{margin:0} [hidden]{display:none!important}
 .pick-thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none}
 .notice-attachments{display:grid;gap:8px;border-top:1px solid var(--line);padding:10px 0;margin-top:10px}
 .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}
+.notice-embed{border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+.notice-embed .embed-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+.notice-embed .embed-head b{flex:1;min-width:0;overflow-wrap:anywhere}
+.notice-embed .embed-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;font-size:14px;margin-top:8px}
+.notice-embed .embed-grid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.embed-pick{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}
+.embed-pick label{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
 .photo-grid.albums{margin-top:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
 .photo-card{padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);color:var(--ink);text-align:left;cursor:pointer;min-width:0}
 .photo-picture{display:grid;place-items:center;aspect-ratio:4/3;background:var(--sunk);overflow:hidden}
@@ -1275,7 +1282,7 @@ $('#main').addEventListener('input',e=>{if(e.target.id==='boardQuery'){boardQuer
 function todayNoticeRow(n){
  return `<details class="today-notice" name="today-notices" data-today-notice="${esc(n.id)}"><summary title="${esc(n.title)}"><span class="today-notice-title">${esc(n.title)}${consentPending(n)?'<span class="consent-badge">동의 필요</span>':''}</span><time class="meta">${esc(String(n.at||"").slice(5,10).replace('-','/'))}</time><span class="today-notice-arrow" aria-hidden="true">▸</span></summary><div data-today-notice-content></div></details>`;
 }
-document.addEventListener("toggle",e=>{const el=e.target;if(!el.matches?.('[data-today-notice]')||!el.open)return;const body=el.querySelector('[data-today-notice-content]'),n=D.notices.find(n=>n.id===el.dataset.todayNotice);if(body&&!body.children.length&&n){body.innerHTML=noticeCard(n);hydrateNoticeImages();hydrateInlineVideos();}},true);
+document.addEventListener("toggle",e=>{const el=e.target;if(!el.matches?.('[data-today-notice]')||!el.open)return;const body=el.querySelector('[data-today-notice-content]'),n=D.notices.find(n=>n.id===el.dataset.todayNotice);if(body&&!body.children.length&&n){body.innerHTML=noticeCard(n);hydrateNoticeImages();hydrateFileImages();hydrateInlineVideos();hydrateNoticeEmbeds();}},true);
 /* 내 오늘 화면: 로그인한 학생·선생님은 카드 순서·숨기기, 할 일·메모, 메뉴 순서·표시를 본인 것으로 저장합니다(서버 앱_내화면). */
 const TODAY_CARDS=[["todo","내 할 일·메모"],["notices","최근 공지"],["meal","오늘 급식"],["focus","확인할 일·요청 결과·팀 소식"],["events","오늘 일정·앞으로 2주"],["contests","다가오는 대회"],["details","활동 자료 불러오기"]];
 const canMyHome=()=>Boolean(D&&D.myHome&&!isGuest()&&!D.loginDisabled);
@@ -1373,12 +1380,14 @@ function noticeDlg(n={}){
  +'<div class="fgrid">'+sel('분류','category',NOTICE_CATEGORIES.map(s=>[s,s]),n.category||'일반 안내')+targetSel(n.target)+'</div>'
  +field('제목','title',n.title||'','text','required maxlength="120" id="f-title"')+area('전달 내용·안내','body',introNoticeBody(n)||'',5000).replace('<textarea ','<textarea id="f-body" placeholder="카톡에서 복사한 내용을 붙여넣으세요" ')
  +'<div class="fgrid">'+sel('관련 프로젝트·자격증·대회','relation',noticeRelatedOptions(n),n.relation||'')+field('주제 (선택)','subject',n.subject||'','text','maxlength="100" placeholder="예: 스마트팜, 실기 준비, 박람회"')+'</div>'
+ +embedPickerHtml(n)
  +area('참가자 동의 받기 (선택 · 쓰면 공지 맨 위에 동의 버튼이 생김)','consent',n.consent||'',1500).replace('<textarea ','<textarea placeholder="예: 대회 발표 영상(학생 얼굴·목소리 포함)을 알림판·유튜브(일부 공개)에 게시하는 데 동의합니까?" ')
  +area('관련 링크 (한 줄에 하나, 최대 8개)','linksText',(n.links||[]).join('\n'),8000)+'<button type="button" class="btn sm ghost" data-notice-extract-links>본문에서 링크 가져오기</button>'
  +'<details '+(n.eventDate?'open':'')+'><summary>일정 달력에도 표시하기</summary><p class="ev-s">행사·시험·제출일 등 날짜가 확실한 경우 입력하세요. 같은 공지가 달력에 연결되며 중복 글은 만들지 않습니다.</p><div class="fgrid">'+field('일정 시작일','eventDate',n.eventDate||'','date')+field('일정 종료일 (여러 날)','eventEnd',n.eventEnd||'','date')+'</div>'+field('장소','place',n.place||'','text','maxlength="150"')+'</details>'
  +filePicker(10,'사진·도면·문제·엑셀 등')+files
  +'<div class="fgrid">'+field('확인 기한 (선택)','due',n.due||'','date','id="f-due"')+'<label class="check"><input type="checkbox" name="pinned" id="f-pinned" '+(n.pinned?'checked':'')+'> 맨 위에 고정</label></div>',
- '저장',async fd=>{try{const uploads=await readDraftUploads(),keepFiles=[...form.querySelectorAll('[name="keepNoticeFile"]:checked')].map(x=>x.value),links=fd.linksText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const r=await callRaw('saveNotice',{id:n.id,...fd,links,keepFiles,uploads},null,true);if(r.load)setData(r.load);else await reload();toast('공지와 전달 자료를 저장했습니다');return true;}catch(e){toast(e.message);return false;}});
+ '저장',async fd=>{try{const uploads=await readDraftUploads(),keepFiles=[...form.querySelectorAll('[name="keepNoticeFile"]:checked')].map(x=>x.value),links=fd.linksText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const embeds=[...form.querySelectorAll('[name="embedBoard"]:checked')].map(x=>({type:'board',id:x.value})).concat([...form.querySelectorAll('[name="embedAlbum"]:checked')].map(x=>({type:'album',id:x.value,name:x.dataset.name||''})));const r=await callRaw('saveNotice',{id:n.id,...fd,links,keepFiles,uploads,embeds},null,true);if(r.load)setData(r.load);else await reload();toast('공지와 전달 자료를 저장했습니다');return true;}catch(e){toast(e.message);return false;}});
+ loadEmbedAlbums();
  form.querySelector('[name="relation"]').addEventListener('change',e=>{const category=form.querySelector('[name="category"]');if(e.target.value.startsWith('cert:'))category.value='자격증·시험';if(e.target.value.startsWith('project:'))category.value='프로젝트·설계';});
 }
 $('#main').addEventListener('click',async e=>{
@@ -1407,6 +1416,35 @@ function consentBoxHtml(n){
  else{const a=n.myConsent||'';inner='<div class="consent-btns"><button type="button" class="btn pri'+(a==='동의'?' chosen':'')+'" data-consent-answer="동의" data-consent-notice="'+esc(n.id)+'">'+(a==='동의'?'✓ ':'')+'동의</button><button type="button" class="btn'+(a==='비동의'?' chosen':'')+'" data-consent-answer="비동의" data-consent-notice="'+esc(n.id)+'">'+(a==='비동의'?'✓ ':'')+'비동의</button></div>';}
  return '<section class="consent-box" data-consent-box="'+esc(n.id)+'"><h4>📢 초상권 사용 동의'+(consentPending(n)?'<span class="consent-badge">응답 필요</span>':'')+'</h4><p class="consent-text">'+esc(n.consent)+'</p>'+inner+'</section>';
 }
+ 
+function embedPickerHtml(n){
+ const had=n.embeds||[],hasB=id=>had.some(e=>e.type==='board'&&e.id===id),posts=[...(D.boardPosts||[])].sort((a,b)=>String(b.at||b.date||'').localeCompare(String(a.at||a.date||''))).slice(0,40);
+ const albums=had.filter(e=>e.type==='album');
+ return '<div class="fld" data-embed-picker><span>공지에 함께 띄울 게시글·사진첩 앨범 (선택)</span><p class="ev-s">고른 글의 영상·사진·내용과 앨범 사진이 이 공지 안에 바로 보입니다. 최대 6개.</p>'
+ +'<b class="ev-s">프로젝트·대회 게시글</b><div class="embed-pick">'+(posts.length?posts.map(p=>'<label><input type="checkbox" name="embedBoard" value="'+esc(p.id)+'" '+(hasB(p.id)?'checked':'')+'><span>'+esc((p.category==='대회'?'[대회] ':p.category==='자격증'?'[자격증] ':'[프로젝트] ')+p.title)+'</span></label>').join(''):'<p class="ev-s">게시글이 없습니다.</p>')+'</div>'
+ +'<b class="ev-s">사진첩 앨범</b><div class="embed-pick" data-embed-albums>'+albums.map(a=>'<label><input type="checkbox" name="embedAlbum" value="'+esc(a.id)+'" data-name="'+esc(a.name)+'" checked><span>'+esc(a.name)+'</span></label>').join('')+'<p class="ev-s" data-embed-albums-status>앨범 목록 불러오는 중…</p></div></div>';
+}
+async function loadEmbedAlbums(){const box=document.querySelector('[data-embed-albums]');if(!box)return;const st=box.querySelector('[data-embed-albums-status]');
+ try{const d=await call('photoBrowse',{folder:''});if(!box.isConnected)return;const have=new Set([...box.querySelectorAll('[name="embedAlbum"]')].map(x=>x.value));
+  (d.folders||[]).filter(f=>!have.has(f.id)).forEach(f=>{const l=document.createElement('label');l.innerHTML='<input type="checkbox" name="embedAlbum" value="'+esc(f.id)+'" data-name="'+esc(f.name)+'"><span>'+esc(f.name)+'</span>';box.insertBefore(l,st);});
+  st.remove();if(!box.querySelector('[name="embedAlbum"]'))box.insertAdjacentHTML('beforeend','<p class="ev-s">사진첩 앨범이 없습니다.</p>');}
+ catch(e){if(st)st.textContent='앨범 목록을 불러오지 못했습니다.';}}
+function noticeEmbedsHtml(n){return (n.embeds||[]).map(e=>{
+ if(e.type==='board'&&e.post){const p=e.post,cat=p.category==='대회'?'🏆 대회':p.category==='자격증'?'📝 자격증':'🛠 프로젝트',body=String(p.body||''),cut=body.length>600?body.slice(0,600)+' …':body;
+  return '<section class="notice-embed" data-embed-board="'+esc(p.id)+'"><div class="embed-head"><span class="chip">'+cat+'</span><b>'+esc(p.title)+'</b><button type="button" class="btn sm" data-embed-open-board="'+esc(p.id)+'" data-embed-category="'+esc(p.category||'')+'">글 전체 보기</button></div>'+youtubeEmbedsHtml(body,p.link||'')+videoCardsHtml(p.files||[],'file')+fileGalleryHtml(p.files||[])+(cut?'<div class="embed-body">'+esc(cut)+'</div>':'')+'</section>';}
+ if(e.type==='album')return '<section class="notice-embed" data-embed-album="'+esc(e.id)+'"><div class="embed-head"><span class="chip">📷 사진첩</span><b>'+esc(e.name||'앨범')+'</b><button type="button" class="btn sm" data-embed-open-album="'+esc(e.id)+'">사진첩에서 보기</button></div><div class="photo-grid embed-grid" data-embed-album-grid="'+esc(e.id)+'"><p class="ev-s">사진 불러오는 중…</p></div></section>';
+ return '';}).join('');}
+const embedAlbumCache=new Map();
+async function hydrateNoticeEmbeds(){
+ for(const grid of document.querySelectorAll('[data-embed-album-grid]:not([data-loaded])')){
+  grid.dataset.loaded='1';const id=grid.dataset.embedAlbumGrid;
+  try{let d=embedAlbumCache.get(id);if(!d){d=await call('photoBrowse',{folder:id});embedAlbumCache.set(id,d);}
+   const list=(d.photos||[]),shown=list.slice(0,8);if(!grid.isConnected)continue;
+   grid.innerHTML=shown.length?shown.map(f=>'<button type="button" class="photo-card" data-embed-open-album="'+esc(id)+'" aria-label="'+esc(f.name)+'">'+(f.video?'<span class="photo-picture" style="display:grid;place-items:center;font-size:28px" aria-hidden="true">▶</span>':photoThumb('data-photo-img="'+esc(f.id)+'" data-photo-updated="'+esc(f.updated||'')+'"',f.name))+'</button>').join('')+(list.length>8?'<button type="button" class="photo-card" data-embed-open-album="'+esc(id)+'"><span class="photo-picture" style="display:grid;place-items:center;font-weight:700">+'+(list.length-8)+'장 더 보기</span></button>':''):'<p class="ev-s">아직 사진이 없습니다.</p>';
+   grid.querySelectorAll('img[data-photo-img]').forEach(img=>photoQueue.push(img));pumpPhotoThumbs();
+  }catch(err){if(grid.isConnected)grid.innerHTML='<p class="ev-s">앨범을 불러오지 못했습니다.</p>';}
+ }
+}
 function noticeCard(n){
   let foot = "";
   if (T()){
@@ -1419,7 +1457,7 @@ function noticeCard(n){
       foot += `<div class="readers"><b>확인</b> ${seen.length ? seen.map(a => `${esc(a.name)} <span class="num">${esc(a.at.slice(5))}</span>`).join(" · ") : "없음"}<br><b>미확인</b> ${un.length ? esc(un.join(", ")) : "없음"}</div>`; }
   } else foot = isGuest()||!matches(n.target,myGroup()) ? "" : D.myAcks.includes(n.id) ? `<span class="ack-ok">✓ 확인함</span>` : `<div><button class="btn sm pri" data-ack="${esc(n.id)}">확인했어요</button></div>`;
   return `<article class="notice"><div class="row">${n.pinned ? '<span class="chip pin">고정</span>' : ""}${targetChip(n.target)}<span class="meta">${esc(n.at)}${n.due ? ` · 기한 ${esc(fmtMD(n.due))}` : ""}</span></div>
-    ${shareButton("notice",n.id)}<h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${youtubeEmbedsHtml(n.body,n.links||[])}${videoCardsHtml(n.files||[],'notice')}${consentBoxHtml(n)}${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeExtras(n)}${foot}</article>`;
+    ${shareButton("notice",n.id)}<h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${youtubeEmbedsHtml(n.body,n.links||[])}${videoCardsHtml(n.files||[],'notice')}${consentBoxHtml(n)}${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeEmbedsHtml(n)}${noticeExtras(n)}${foot}</article>`;
 }
 function vNotices(){
  if(noticeOpen){const n=D.notices.find(n=>n.id===noticeOpen);if(n)return '<div class="row" style="margin-bottom:12px"><button class="btn ghost" data-notice-back>‹ 공지 목록으로</button></div><section class="panel">'+noticeCard(n)+'</section>';noticeOpen=null;}
@@ -2488,7 +2526,7 @@ function render(){
   if(isGuest())document.querySelectorAll('[data-board-new],[data-cert-new],[data-contest-new],[data-cert-post-new],#boardCommentForm').forEach(e=>e.remove());
   if(SHARE_PAGES.includes(tab))$("#main").insertAdjacentHTML("afterbegin",'<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm ghost" data-copy-menu>이 메뉴 링크 복사</button></div>');
   syncShareAddress();viewerStrip();bindBoardComment();finishNav();
-  hydrateDrives(); hydrateNoticeImages();hydrateFileImages();hydrateInlineVideos();hydrateResourceLinks();hydratePhotos();hydratePurchaseLinks();hydrateEquipment();
+  hydrateDrives(); hydrateNoticeImages();hydrateFileImages();hydrateInlineVideos();hydrateNoticeEmbeds();hydrateResourceLinks();hydratePhotos();hydratePurchaseLinks();hydrateEquipment();
   if (draft !== null && $("#replyText")) $("#replyText").value = draft;
   if (anonDraft !== null && $("#anonText")) $("#anonText").value = anonDraft;
   if (armed){ const b = [...document.querySelectorAll("[data-del],[data-delpe],[data-extra-delete],[data-anon-del],[data-file-del],[data-co-del]")].find(x => (x.dataset.del || x.dataset.extraDelete || x.dataset.anonDel || x.dataset.fileDel || (x.dataset.coDel ? "co|" + x.dataset.coDel : "") || "pe|" + x.dataset.delpe) === armed); if (b){ b.classList.add("armed"); b.textContent = "삭제 확인"; } }
@@ -2703,6 +2741,8 @@ $("#main").addEventListener("click", e => {
   if (d.delst){ const st = D.roster.find(r => String(r.row) === d.delst); if (!st || !arm(t, "st" + d.delst)) return; return act("deleteStudent", { row: st.row, name: st.name }, st.name + " 학생을 명단에서 삭제했습니다 (훈련 기록은 남아 있습니다)"); }
   if (d.readers){ openReaders.has(d.readers) ? openReaders.delete(d.readers) : openReaders.add(d.readers); return render(); }
   if (d.ack) return act("ack", { id: d.ack }, "확인했습니다");
+  if (d.embedOpenBoard){ boardOpen=d.embedOpenBoard; projSub='board'; return go(d.embedCategory==='대회'?'contest':d.embedCategory==='자격증'?'cert':'projects'); }
+  if (d.embedOpenAlbum){ photoState.folder=d.embedOpenAlbum; photoState.data=null; photoState.error=''; return go('photos'); }
   if (d.consentAnswer) return act("noticeConsent", { id: d.consentNotice, answer: d.consentAnswer }, d.consentAnswer === "동의" ? "동의로 저장했습니다" : "비동의로 저장했습니다");
   if (d.del){ if (!arm(t, d.del)) return; const [tabName, id] = d.del.split("|"); return act("deleteRow", { tab: tabName, id }, "삭제했습니다"); }
   if (d.delpe){ if (!arm(t, "pe|" + d.delpe)) return; return act("delPersonal", { id: d.delpe }, "삭제했습니다"); }
