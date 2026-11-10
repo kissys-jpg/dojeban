@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="d289747">
+<meta name="dj-build" content="5e7dd86">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -541,7 +541,7 @@ function viewerStrip(){if(!isViewer()){if(viewerObs){viewerObs.disconnect();view
 const GUEST_TABS = ["today","notices","schedule","after","school","projects","board","contest","cert","company","materials","tools"];
 /* 공지의 마지막 날: 확인 기한·일정 종료일·일정일 중 가장 늦은 날. 지나면 최근 공지·확인할 일에서 뺌(공지 메뉴 원본은 그대로) */
 /* 서버 noticeLastDay_와 같은 규칙: 기한·일정·제목 날짜 중 가장 늦은 날, 날짜가 없으면 올린 날+7일(2026-11-04 선생님 지시) */
-const noticeLastDay = n => { const at = String(n.at||"").slice(0,10), days = [n.due, n.eventEnd, n.eventDate].filter(Boolean).map(d => String(d).slice(0,10)); const t = String(n.title||"").match(/(?:^|[^\d])(1[0-2]|0?[1-9])\s*(?:\/|\.|월\s*)(3[01]|[12]\d|0?[1-9])(?![\dA-Za-z])/); const okAt = /^\d{4}-\d\d-\d\d$/.test(at); if (t && okAt) { const mo = Number(t[1]), y = Number(at.slice(0,4)) + (mo < Number(at.slice(5,7)) - 6 ? 1 : 0); days.push(y + "-" + String(mo).padStart(2,"0") + "-" + String(t[2]).padStart(2,"0")); } if (days.length) return days.sort().pop(); return okAt ? addDays(at, 7) : ""; };
+const noticeLastDay = n => {const at=String(n.at||"").slice(0,10),days=[n.due,n.eventEnd,n.eventDate].filter(Boolean).map(d=>String(d).slice(0,10)),okAt=/^\d{4}-\d\d-\d\d$/.test(at),re=/(?:^|[^\d])(?:(\d{4})\s*[.\/-]\s*)?(1[0-2]|0?[1-9])\s*(?:\/|\.|월\s*)(3[01]|[12]\d|0?[1-9])(?![\dA-Za-z])/g;let t;while((t=re.exec(String(n.title||"")))){if(!t[1]&&!okAt)continue;const mo=Number(t[2]),day=Number(t[3]),y=t[1]?Number(t[1]):Number(at.slice(0,4))+(mo<Number(at.slice(5,7))-6?1:0),d=new Date(y,mo-1,day);if(d.getFullYear()===y&&d.getMonth()===mo-1&&d.getDate()===day)days.push(y+"-"+String(mo).padStart(2,"0")+"-"+String(day).padStart(2,"0"));}if(days.length)return days.sort().pop();return okAt?addDays(at,7):"";};
 const noticeLive = n => { const d = noticeLastDay(n); return !d || d >= TODAY; };
 const matches = (t, g) => !t || t === "all" || t === g || (t === "pre" && (g === "pre1" || g === "pre2"));
 
@@ -653,6 +653,7 @@ function importClass3Dlg(){openDlg('1~3학년 3반 학생 계정 등록','<p>교
 $('#main').addEventListener('click',e=>{if(e.target.closest('[data-student-password],[data-staff-password]'))studentPasswordDlg();if(e.target.closest('[data-public-access]'))act('setPublicAccess',{enabled:!D.publicAccess},D.publicAccess?'로그인 필수로 잠갔습니다':'자유 접속을 허용했습니다');if(e.target.closest('[data-setup-staff]'))setupStaffDlg();if(e.target.closest('[data-staff-list]'))staffAccountsDlg();if(e.target.closest('[data-import-class3]'))importClass3Dlg();if(e.target.closest('[data-account-save]')){if(!cred||!cred.session)return;storeStudentSession(cred.session,$('#studentAccountKeep').checked);lsSet(T()?'dj.teacher.name':'dj.name',D.me.name);toast('내 로그인 정보를 저장했습니다');}});
  
 function gate(msg){
+  resetAccountMedia();
   navHistory=[];navAnchor='';
   $("#startupScreen").hidden=true;
   $("#shell").hidden = true; $("#gate").hidden = false;
@@ -690,7 +691,7 @@ function gate(msg){
     } catch (err) { if(err.choices&&err.choices.length&&mode==="student"&&!pick){pickDlg("본인을 골라 주세요.",err.choices);return;} pick=""; gate(err.message); }
   };
 }
-function logout(msg){journalData=null;journalError="";journalActor="";rosterSelected.clear(); if(cred&&cred.session)call("logoutSession",{token:cred.session}).catch(()=>{});try{sessionStorage.removeItem("dj.session");}catch{}fullLoadEpoch++;fullLoadPending=null;fullLoadError=""; clearGlobalSearch(); todayDriveNews.clear();todayNewsOwner="";resourceLinkEpoch++;resourceLinkPending=null; if (D && D.loginDisabled) return reload(); const guestOk = Boolean(D && D.guestView); cred = null; D = null; noticeImages.clear(); noticeImagesPending.clear(); lsSet("dj.cred", null); lsSet(HOME_KEY, null); if (guestOk && !msg) return enterGuest(); gate(msg); }
+function logout(msg){resetAccountMedia();journalData=null;journalError="";journalActor="";rosterSelected.clear(); if(cred&&cred.session)call("logoutSession",{token:cred.session}).catch(()=>{});try{sessionStorage.removeItem("dj.session");}catch{}fullLoadEpoch++;fullLoadPending=null;fullLoadError=""; clearGlobalSearch(); todayDriveNews.clear();todayNewsOwner="";resourceLinkEpoch++;resourceLinkPending=null; if (D && D.loginDisabled) return reload(); const guestOk = Boolean(D && D.guestView); cred = null; D = null; noticeImages.clear(); noticeImagesPending.clear(); lsSet("dj.cred", null); lsSet(HOME_KEY, null); if (guestOk && !msg) return enterGuest(); gate(msg); }
 $("#logoutTop").onclick = () => (isGuest()||isViewer()) ? gate() : logout();
 /* 로그인 없이 둘러보기: 비어 있는 로그인 정보로 들어오면 서버가 '손님'으로 공개 자료만 보냅니다. */
 async function enterGuest(){ try { const data = await call("load", {deferLinks:true,homeOnly:true}, {}); if (!data.me || data.me.role !== "guest" && !data.loginDisabled) throw new Error("로그인해 주세요"); cred = {}; $("#gate").hidden = true; $("#shell").hidden = false; tab = "today"; setData(data); } catch (e) { gate(e.message); } }
@@ -1133,8 +1134,21 @@ function boardList(){const q=boardQuery.trim().toLowerCase();return [...(D.board
 const isImageFile = f => /^image\/(png|jpeg|gif|webp)$/.test(String(f.mime||"")) || /\.(png|jpe?g|gif|webp)$/i.test(String(f.name||""));
  
 function fileGalleryHtml(files){const imgs=(files||[]).filter(isImageFile);return imgs.length?'<div class="notice-gallery">'+imgs.map(f=>'<button type="button" class="notice-photo" data-document-preview="file|'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기"><img data-file-img="'+esc(f.id)+'" alt="'+esc(f.name)+'" hidden><span class="ev-s" data-file-img-status>사진 불러오는 중…</span></button>').join('')+'</div>':'';}
+let accountMediaEpoch=0;
+function mediaOwner(){return accountMediaEpoch+"|"+JSON.stringify(cred||{});}
+function checkMediaOwner(owner){if(owner!==mediaOwner())throw Error("계정이 변경되어 자료 불러오기를 중단했습니다");}
+function resetAccountMedia(){
+ accountMediaEpoch++;
+ [fileImageObserver,noticeObserver,inlineVideoObserver,photoObserver].forEach(o=>{if(o)o.disconnect();});
+ document.querySelectorAll("video").forEach(v=>{v.pause();v.removeAttribute("src");v.load();});
+ inlineVideos.forEach(u=>URL.revokeObjectURL(u));inlineVideos.clear();inlineVideoLoading.clear();
+ fileImages.clear();fileImagesPending.clear();noticeImages.clear();noticeImagesPending.clear();embedAlbumCache.clear();
+ photoQueue.length=0;photoCache.clear();photoState.ticket++;photoState.data=null;photoState.folder="";photoState.loading=false;photoActor="";
+ if(photoVideoUrl){URL.revokeObjectURL(photoVideoUrl);photoVideoUrl="";}
+ if(dlg.open)dlg.close();form.replaceChildren();onSubmit=null;$("#main").replaceChildren();
+}
 const fileImages = new Map(), fileImagesPending = new Map(); let fileImageObserver = null;
-function fileImageData(id){if(fileImages.has(id))return Promise.resolve(fileImages.get(id));if(fileImagesPending.has(id))return fileImagesPending.get(id);const req=call('downloadFile',{id}).then(f=>{const src='data:'+f.mime+';base64,'+f.base64;if(fileImages.size>=30)fileImages.delete(fileImages.keys().next().value);fileImages.set(id,src);return src;}).finally(()=>fileImagesPending.delete(id));fileImagesPending.set(id,req);return req;}
+function fileImageData(id){if(fileImages.has(id))return Promise.resolve(fileImages.get(id));if(fileImagesPending.has(id))return fileImagesPending.get(id);const owner=mediaOwner(),req=call('downloadFile',{id}).then(f=>{checkMediaOwner(owner);const src='data:'+f.mime+';base64,'+f.base64;if(fileImages.size>=30)fileImages.delete(fileImages.keys().next().value);fileImages.set(id,src);return src;}).finally(()=>{if(fileImagesPending.get(id)===req)fileImagesPending.delete(id);});fileImagesPending.set(id,req);return req;}
 function hydrateFileImages(){
  if(fileImageObserver)fileImageObserver.disconnect();
  fileImageObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting)return;const img=entry.target.querySelector('[data-file-img]');fileImageObserver.unobserve(entry.target);if(!img)return;fileImageData(img.dataset.fileImg).then(src=>{if(!img.isConnected)return;img.src=src;img.hidden=false;const st=img.parentElement.querySelector('[data-file-img-status]');if(st)st.hidden=true;}).catch(()=>{if(!img.isConnected)return;const st=img.parentElement.querySelector('[data-file-img-status]');if(st)st.textContent='사진 보기 · 원본 받기';});}),{rootMargin:'100px'});
@@ -1148,20 +1162,21 @@ function videoCardsHtml(files,root){return (files||[]).filter(isVideoFile).map(f
 function loadInlineVideo(key){
  if(inlineVideos.has(key))return Promise.resolve(inlineVideos.get(key));
  if(inlineVideoLoading.has(key))return inlineVideoLoading.get(key);
- const i=key.lastIndexOf('|'),root=key.slice(0,i),id=key.slice(i+1),action=root==='notice'?'noticeDownload':'downloadFile';
+ const owner=mediaOwner(),i=key.lastIndexOf('|'),root=key.slice(0,i),id=key.slice(i+1),action=root==='notice'?'noticeDownload':'downloadFile';
  const show=t=>document.querySelectorAll('[data-inline-video="'+CSS.escape(key)+'"] [data-video-status]').forEach(el=>el.textContent=t);
  const bytesOf=r=>Uint8Array.from(atob(r.base64||''),c=>c.charCodeAt(0));
  const job=(async()=>{
-  const first=await call(action,{id,offset:0}),head=bytesOf(first);if(!head.length)throw Error('영상을 불러오지 못했습니다');
+  const first=await call(action,{id,offset:0});checkMediaOwner(owner);const head=bytesOf(first);if(!head.length)throw Error('영상을 불러오지 못했습니다');
   const size=first.size||head.length,step=head.length,parts=[head];let got=head.length;
   if(!first.done&&got<size){const offs=[];for(let o=step;o<size;o+=step)offs.push(o);let next=0;
    show('영상 불러오는 중 · '+Math.round(got/size*100)+'%');
-   const worker=async()=>{while(next<offs.length){const k=next++,r=await call(action,{id,offset:offs[k]}),b=bytesOf(r);if(!b.length)throw Error('영상을 불러오지 못했습니다');parts[k+1]=b;got+=b.length;show('영상 불러오는 중 · '+Math.min(100,Math.round(got/size*100))+'%');}};
+   const worker=async()=>{while(next<offs.length){checkMediaOwner(owner);const k=next++,r=await call(action,{id,offset:offs[k]});checkMediaOwner(owner);const b=bytesOf(r);if(!b.length)throw Error('영상을 불러오지 못했습니다');parts[k+1]=b;got+=b.length;show('영상 불러오는 중 · '+Math.min(100,Math.round(got/size*100))+'%');}};
    await Promise.all([worker(),worker(),worker(),worker()]);}
-  if(inlineVideos.size>=3){const [k,u]=inlineVideos.entries().next().value;URL.revokeObjectURL(u);inlineVideos.delete(k);}
+  checkMediaOwner(owner);
+  if(inlineVideos.size>=3){for(const [k,u] of inlineVideos){if(!Array.from(document.querySelectorAll('video')).some(v=>v.src===u)){URL.revokeObjectURL(u);inlineVideos.delete(k);if(inlineVideos.size<3)break;}}}
   const url=URL.createObjectURL(new Blob(parts,{type:first.mime||'video/mp4'}));inlineVideos.set(key,url);return url;
  })();
- inlineVideoLoading.set(key,job);job.finally(()=>inlineVideoLoading.delete(key)).catch(()=>{});return job;
+ inlineVideoLoading.set(key,job);job.finally(()=>{if(inlineVideoLoading.get(key)===job)inlineVideoLoading.delete(key);}).catch(()=>{});return job;
 }
 let inlineVideoObserver=null;
 function hydrateInlineVideos(){
@@ -1172,7 +1187,14 @@ function hydrateInlineVideos(){
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-video-retry]');if(!b)return;const box=b.closest('[data-inline-video]');const w=box&&box.querySelector('[data-video-status]');if(w){w.textContent='영상 준비 중…';inlineVideoObserver.observe(box);}});
  
-function youtubeIds(...texts){const out=[];texts.flat().forEach(t=>String(t||'').replace(/(?:youtube\.com\/(watch\?(?:[^\s#]*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/g,(m,kind,id)=>{if(!out.some(x=>x.id===id))out.push({id,short:kind==='shorts/'});return m;}));return out.slice(0,3);}
+function youtubeIds(...texts){
+ const out=[],re=/(?:^|[^\w./@-])((?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)*(?:youtube\.com|youtu\.be)\/[^\s<>"']+)/gi;
+ texts.flat().forEach(t=>{let m;while((m=re.exec(String(t||'')))){try{const raw=m[1].replace(/[),.;!?]+$/,''),u=new URL(/^https?:/i.test(raw)?raw:'https:'+String.fromCharCode(47,47)+raw),host=u.hostname.toLowerCase(),p=u.pathname.split('/').filter(Boolean);let id='',short=false;
+ if(['youtube.com','www.youtube.com','m.youtube.com'].includes(host)){if(u.pathname==='/watch')id=u.searchParams.get('v')||'';else if(['shorts','embed','live'].includes(p[0])&&p.length===2){id=p[1];short=p[0]==='shorts';}}
+ else if(['youtu.be','www.youtu.be'].includes(host)&&p.length===1)id=p[0];
+ if(/^[\w-]{11}$/.test(id)&&!out.some(x=>x.id===id))out.push({id,short});
+ }catch{}}});return out.slice(0,3);
+}
 function youtubeEmbedsHtml(...texts){return youtubeIds(...texts).map(({id,short})=>'<div class="inline-video yt'+(short?' short':'')+'"><iframe src="https:\/\/www.youtube-nocookie.com\/embed\/'+id+'?playsinline=1&rel=0" title="유튜브 영상" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>').join('');}
 function boardFilesHtml(files){return fileGalleryHtml(files)+videoCardsHtml(files,'file')+(files||[]).map(f=>'<div class="row" style="margin-top:8px"><span style="flex:1;overflow-wrap:anywhere">'+esc(f.name)+' <small class="muted">'+fmtSize(f.size)+'</small></span><button class="btn sm" data-file="'+esc(f.id)+'">받기</button>'+documentPreviewButton(f,'file')+'</div>').join('');}
  
@@ -1358,7 +1380,7 @@ function relatedNotices(relation,label){
 async function noticePhotoData(id,original=false){
  const key=id+(original?':original':'');if(noticeImages.has(key))return noticeImages.get(key);
  if(noticeImagesPending.has(key))return noticeImagesPending.get(key);
- const req=call('noticeImage',{id,original}).then(f=>{const src='data:'+f.mime+';base64,'+f.base64;if(noticeImages.size>=30)noticeImages.delete(noticeImages.keys().next().value);noticeImages.set(key,src);return src;}).finally(()=>noticeImagesPending.delete(key));noticeImagesPending.set(key,req);return req;
+ const owner=mediaOwner(),req=call('noticeImage',{id,original}).then(f=>{checkMediaOwner(owner);const src='data:'+f.mime+';base64,'+f.base64;if(noticeImages.size>=30)noticeImages.delete(noticeImages.keys().next().value);noticeImages.set(key,src);return src;}).finally(()=>{if(noticeImagesPending.get(key)===req)noticeImagesPending.delete(key);});noticeImagesPending.set(key,req);return req;
 }
 function hydrateNoticeImages(){
  if(noticeObserver)noticeObserver.disconnect();
@@ -1437,8 +1459,8 @@ function noticeEmbedsHtml(n){return (n.embeds||[]).map(e=>{
 const embedAlbumCache=new Map();
 async function hydrateNoticeEmbeds(){
  for(const grid of document.querySelectorAll('[data-embed-album-grid]:not([data-loaded])')){
-  grid.dataset.loaded='1';const id=grid.dataset.embedAlbumGrid;
-  try{let d=embedAlbumCache.get(id);if(!d){d=await call('photoBrowse',{folder:id});embedAlbumCache.set(id,d);}
+  grid.dataset.loaded='1';const owner=mediaOwner(),id=grid.dataset.embedAlbumGrid;
+  try{let d=embedAlbumCache.get(id);if(!d){d=await call('photoBrowse',{folder:id});checkMediaOwner(owner);embedAlbumCache.set(id,d);}
    const list=(d.photos||[]),shown=list.slice(0,8);if(!grid.isConnected)continue;
    grid.innerHTML=shown.length?shown.map(f=>'<button type="button" class="photo-card" data-embed-open-album="'+esc(id)+'" aria-label="'+esc(f.name)+'">'+(f.video?'<span class="photo-picture" style="display:grid;place-items:center;font-size:28px" aria-hidden="true">▶</span>':photoThumb('data-photo-img="'+esc(f.id)+'" data-photo-updated="'+esc(f.updated||'')+'"',f.name))+'</button>').join('')+(list.length>8?'<button type="button" class="photo-card" data-embed-open-album="'+esc(id)+'"><span class="photo-picture" style="display:grid;place-items:center;font-weight:700">+'+(list.length-8)+'장 더 보기</span></button>':''):'<p class="ev-s">아직 사진이 없습니다.</p>';
    grid.querySelectorAll('img[data-photo-img]').forEach(img=>photoQueue.push(img));pumpPhotoThumbs();
@@ -2256,8 +2278,8 @@ function queuePhotoThumbs(el){
 }
 async function pumpPhotoThumbs(){
  if(photoActive>=3)return;const img=photoQueue.shift();if(!img)return;if(!img.isConnected){pumpPhotoThumbs();return;}photoActive++;
- const p=img.dataset.photoCover?{album:img.dataset.photoCover}:{id:img.dataset.photoImg},key=JSON.stringify(p)+(img.dataset.photoUpdated||"");
- try{let r=photoCache.get(key);if(!r){r=await call("photoImage",p);photoCache.set(key,r);if(photoCache.size>64)photoCache.delete(photoCache.keys().next().value);}if(img.isConnected){const status=img.parentElement.querySelector('.photo-status');if(r.empty){status.textContent="사진 표지 없음";}else{img.src='data:'+r.mime+';base64,'+r.base64;img.hidden=false;status.hidden=true;}}}
+ const owner=mediaOwner(),p=img.dataset.photoCover?{album:img.dataset.photoCover}:{id:img.dataset.photoImg},key=JSON.stringify(p)+(img.dataset.photoUpdated||"");
+ try{let r=photoCache.get(key);if(!r){r=await call("photoImage",p);checkMediaOwner(owner);photoCache.set(key,r);if(photoCache.size>64)photoCache.delete(photoCache.keys().next().value);}if(img.isConnected){const status=img.parentElement.querySelector('.photo-status');if(r.empty){status.textContent="사진 표지 없음";}else{img.src='data:'+r.mime+';base64,'+r.base64;img.hidden=false;status.hidden=true;}}}
  catch(e){if(img.isConnected){const status=img.parentElement.querySelector('.photo-status');status.textContent='미리보기 준비 중';status.title=e.message;}}
  finally{photoActive--;pumpPhotoThumbs();}pumpPhotoThumbs();
 }
