@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="13cfbd8">
+<meta name="dj-build" content="6693bd2">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -546,7 +546,9 @@ function viewerStrip(){if(!isViewer()){if(viewerObs){viewerObs.disconnect();view
 const GUEST_TABS = ["today","notices","schedule","after","school","projects","board","contest","cert","company","materials","tools"];
 /* 공지의 마지막 날: 확인 기한·일정 종료일·일정일 중 가장 늦은 날. 지나면 최근 공지·확인할 일에서 뺌(공지 메뉴 원본은 그대로) */
 /* 서버 noticeLastDay_와 같은 규칙: 기한·일정·제목 날짜 중 가장 늦은 날, 날짜가 없으면 올린 날+7일(2026-11-04 선생님 지시) */
-const noticeLastDay = n => {const at=String(n.at||"").slice(0,10),days=[n.due,n.eventEnd,n.eventDate].filter(Boolean).map(d=>String(d).slice(0,10)),okAt=/^\d{4}-\d\d-\d\d$/.test(at),re=/(?:^|[^\d])(?:(\d{4})\s*[.\/-]\s*)?(1[0-2]|0?[1-9])\s*(?:\/|\.|월\s*)(3[01]|[12]\d|0?[1-9])(?![\dA-Za-z])/g;let t;while((t=re.exec(String(n.title||"")))){if(!t[1]&&!okAt)continue;const mo=Number(t[2]),day=Number(t[3]),y=t[1]?Number(t[1]):Number(at.slice(0,4))+(mo<Number(at.slice(5,7))-6?1:0),d=new Date(y,mo-1,day);if(d.getFullYear()===y&&d.getMonth()===mo-1&&d.getDate()===day)days.push(y+"-"+String(mo).padStart(2,"0")+"-"+String(day).padStart(2,"0"));}if(days.length)return days.sort().pop();return okAt?addDays(at,7):"";};
+const noticeLastDay = (n,includeFallback=true) => {const at=String(n.at||"").slice(0,10),days=[n.due,n.eventEnd,n.eventDate].filter(Boolean).map(d=>String(d).slice(0,10)),okAt=/^\d{4}-\d\d-\d\d$/.test(at),re=/(?:^|[^\d])(?:(\d{4})\s*[.\/-]\s*)?(1[0-2]|0?[1-9])\s*(?:\/|\.|월\s*)(3[01]|[12]\d|0?[1-9])(?![\dA-Za-z])/g;let t;while((t=re.exec(String(n.title||"")))){if(!t[1]&&!okAt)continue;const mo=Number(t[2]),day=Number(t[3]),y=t[1]?Number(t[1]):Number(at.slice(0,4))+(mo<Number(at.slice(5,7))-6?1:0),d=new Date(y,mo-1,day);if(d.getFullYear()===y&&d.getMonth()===mo-1&&d.getDate()===day)days.push(y+"-"+String(mo).padStart(2,"0")+"-"+String(day).padStart(2,"0"));}if(days.length)return days.sort().pop();return okAt&&includeFallback!==false?addDays(at,7):"";};
+const noticeEnded = n => {const day=noticeLastDay(n,false);return Boolean(day&&day<TODAY);};
+const noticePinned = n => Boolean(n.pinned)&&!noticeEnded(n);
 const noticeLive = n => { const d = noticeLastDay(n); return !d || d >= TODAY; };
 const matches = (t, g) => !t || t === "all" || t === g || (t === "pre" && (g === "pre1" || g === "pre2"));
 
@@ -1312,7 +1314,7 @@ function noticeReadingInfo(n){
 }
 function orderNoticeReading(items){
  const out=items.slice(),groups={};
- out.forEach(function(n,i){const info=noticeReadingInfo(n);if(!info)return;const key=info.series+"|"+String(n.at||"").slice(0,10)+"|"+Boolean(n.pinned);(groups[key]||(groups[key]=[])).push(i);});
+ out.forEach(function(n,i){const info=noticeReadingInfo(n);if(!info)return;const key=info.series+"|"+String(n.at||"").slice(0,10)+"|"+noticePinned(n);(groups[key]||(groups[key]=[])).push(i);});
  Object.keys(groups).forEach(function(key){const positions=groups[key],ordered=positions.map(function(i){return out[i];}).sort(function(a,b){return noticeReadingInfo(a).order-noticeReadingInfo(b).order;});positions.forEach(function(pos,i){out[pos]=ordered[i];});});return out;
 }
 function noticeReadingHeading(n){
@@ -1426,7 +1428,7 @@ function noticeDlg(n={}){
  +area('관련 링크 (한 줄에 하나, 최대 8개)','linksText',(n.links||[]).join('\n'),8000)+'<button type="button" class="btn sm ghost" data-notice-extract-links>본문에서 링크 가져오기</button>'
  +'<details '+(n.eventDate?'open':'')+'><summary>일정 달력에도 표시하기</summary><p class="ev-s">행사·시험·제출일 등 날짜가 확실한 경우 입력하세요. 같은 공지가 달력에 연결되며 중복 글은 만들지 않습니다.</p><div class="fgrid">'+field('일정 시작일','eventDate',n.eventDate||'','date')+field('일정 종료일 (여러 날)','eventEnd',n.eventEnd||'','date')+'</div>'+field('장소','place',n.place||'','text','maxlength="150"')+'</details>'
  +filePicker(10,'사진·도면·문제·엑셀 등')+files
- +'<div class="fgrid">'+field('확인 기한 (선택)','due',n.due||'','date','id="f-due"')+'<label class="check"><input type="checkbox" name="pinned" id="f-pinned" '+(n.pinned?'checked':'')+'> 맨 위에 고정</label></div>',
+ +'<div class="fgrid">'+field('확인 기한 (선택)','due',n.due||'','date','id="f-due"')+'<label class="check"><input type="checkbox" name="pinned" id="f-pinned" '+(noticePinned(n)?'checked':'')+'> 맨 위에 고정 (기한·일정 종료 시 해제)</label></div>',
  '저장',async fd=>{try{const uploads=await readDraftUploads(),keepFiles=[...form.querySelectorAll('[name="keepNoticeFile"]:checked')].map(x=>x.value),links=fd.linksText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const embeds=[...form.querySelectorAll('[name="embedBoard"]:checked')].map(x=>({type:'board',id:x.value})).concat([...form.querySelectorAll('[name="embedAlbum"]:checked')].map(x=>({type:'album',id:x.value,name:x.dataset.name||''})));const r=await callRaw('saveNotice',{id:n.id,...fd,links,keepFiles,uploads,embeds},null,true);if(r.load)setData(r.load);else await reload();toast('공지와 전달 자료를 저장했습니다');return true;}catch(e){toast(e.message);return false;}});
  loadEmbedAlbums();
  form.querySelector('[name="relation"]').addEventListener('change',e=>{const category=form.querySelector('[name="category"]');if(e.target.value.startsWith('cert:'))category.value='자격증·시험';if(e.target.value.startsWith('project:'))category.value='프로젝트·설계';});
@@ -1445,7 +1447,7 @@ $('#main').addEventListener('click',async e=>{
 $('#main').addEventListener('input',e=>{if(e.target.id!=='noticeQuery')return;noticeQuery=e.target.value;const pos=e.target.selectionStart;render();const input=$('#noticeQuery');if(input){input.focus();input.setSelectionRange(pos,pos);}});
 
  
-const sortedNotices = () => orderNoticeReading([...D.notices].sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0) || String(b.at).localeCompare(String(a.at))));
+const sortedNotices = () => orderNoticeReading([...D.notices].sort((a,b) => (noticePinned(b)?1:0) - (noticePinned(a)?1:0) || String(b.at).localeCompare(String(a.at))));
  
 const consentPending = n => !!(n.consent && D.me && D.me.role === 'student' && !n.myConsent);
 function consentBoxHtml(n){
@@ -1497,7 +1499,7 @@ function noticeCard(n){
     if (!D.homeOnly&&openReaders.has(n.id)) { const un = targets.filter(r => !seen.some(a => a.name === r.name)).map(r => r.name);
       foot += `<div class="readers"><b>확인</b> ${seen.length ? seen.map(a => `${esc(a.name)} <span class="num">${esc(a.at.slice(5))}</span>`).join(" · ") : "없음"}<br><b>미확인</b> ${un.length ? esc(un.join(", ")) : "없음"}</div>`; }
   } else foot = isGuest()||!matches(n.target,myGroup()) ? "" : D.myAcks.includes(n.id) ? `<span class="ack-ok">✓ 확인함</span>` : `<div><button class="btn sm pri" data-ack="${esc(n.id)}">확인했어요</button></div>`;
-  return `<article class="notice"><div class="row">${n.pinned ? '<span class="chip pin">고정</span>' : ""}${targetChip(n.target)}<span class="meta">${esc(n.at)}${n.due ? ` · 기한 ${esc(fmtMD(n.due))}` : ""}</span></div>
+  return `<article class="notice"><div class="row">${noticePinned(n) ? '<span class="chip pin">고정</span>' : noticeEnded(n)?'<span class="chip">종료된 안내</span>':""}${targetChip(n.target)}<span class="meta">${esc(n.at)}${n.due ? ` · 기한 ${esc(fmtMD(n.due))}` : ""}</span></div>
     ${noticeReadingHeading(n)}${shareButton("notice",n.id)}<h3><button class="notice-title" data-notice-open="${esc(n.id)}">${esc(n.title)}</button></h3>${youtubeEmbedsHtml(n.body,n.links||[])}${videoCardsHtml(n.files||[],'notice')}${consentBoxHtml(n)}${n.body ? `<div class="body">${esc(introNoticeBody(n))}</div>` : ""}${noticeEmbedsHtml(n)}${noticeExtras(n)}${foot}</article>`;
 }
 function vNotices(){
@@ -1522,11 +1524,11 @@ function isCalendarHoliday(date,events){
  if(["01-01","03-01","05-05","06-06","08-15","10-03","10-09","12-25"].includes(date.slice(5)))return true;
  return (events||[]).some(isHolidayEvent);
 }
- 
+/* 일정 메뉴의 훈련시간만 숨깁니다. 원본·오늘·훈련 전용 시간표는 유지합니다. */
 function isScheduleTrainingTime(e){
   const k=String(e.kind||"").toUpperCase().replace(/[\s_-]/g,"");
   if(["OJT","OFF","OFFJT"].includes(k))return true;
-   
+  /* 구글 캘린더에서 일반 일정으로 읽힌 훈련시간도 구분합니다. */
   const title=String(e.title||"").trim();
   return /^(?:\[|\()?\s*(?:OJT|OFF[\s-]*JT)\s*(?:\]|\))?(?=$|[\s·:：-]|훈련|수업|실습)/i.test(title)
     && (Boolean(e.time)||/훈련|수업|실습/.test(title)||/^(?:\[|\()?\s*(?:OJT|OFF[\s-]*JT)\s*(?:\]|\))?$/i.test(title));
@@ -1569,7 +1571,7 @@ function vAfter(){
   return `${schedHead()}<div class="row"><button class="btn sm" data-aftweek="-7" aria-label="이전 주">‹</button><b class="num">${esc(fmtMD(ws))} ~ ${esc(fmtMD(days[4]))}</b><button class="btn sm" data-aftweek="7" aria-label="다음 주">›</button><span class="spacer"></span><button class="btn sm ghost" data-aftweek="0">이번 주</button></div>${body}`;
 }
 
- 
+/* ---------- 요청함 ---------- */
 const reqChip = s => `<span class="chip ${s === "완료" ? "ok" : s === "처리중" ? "learner" : "pre"}">${esc(s || "접수")}</span>`;
 function vRequests(){
   if (reqOpen){
@@ -1592,7 +1594,7 @@ function vRequests(){
       : emptyBox(reqFilter === "done" ? "완료된 요청이 없습니다" : "진행 중인 요청이 없습니다", T() ? "" : "‘요청하기’로 선생님께 비공개로 남길 수 있습니다.")}</section>`;
 }
 
-/* ---------- 도제 훈련 ---------- */
+ 
 const TRAIN_KINDS = ["OJT","OFF","EVAL"];
 function attSummary(name){
   const rec = D.attendance.filter(a => a.name === name && /OJT|OFF/i.test(a.lesson));
@@ -1636,8 +1638,8 @@ function vTraining(){
     <section class="panel"><div class="pad row"><span class="label">훈련 기업</span><span class="spacer"></span><button class="btn sm pri" data-co-new>+ 기업</button></div>
       ${(D.companies || []).length ? D.companies.map(c => `<div class="att"><div class="who"><b>${esc(c.name)}</b><small>${esc(c.mentor ? "기업현장교사 " + c.mentor : "기업현장교사 미등록")}${c.phone ? " · " + esc(c.phone) : ""}${c.address ? " · " + esc(c.address) : ""}</small><small>배정 ${(D.assigns || []).filter(a => a.company === c.id).map(a => esc(a.name)).join(", ") || "없음"}</small></div><div class="row"><button class="btn sm" data-co-edit="${esc(c.id)}">수정</button><button class="btn sm ghost danger" data-co-del="${esc(c.id)}">삭제</button></div></div>`).join("") : emptyBox("등록된 훈련 기업이 없습니다")}</section>`;
 }
- 
- 
+/* ---------- 기업정보 ---------- */
+/* 기업정보와 직무체험 준비 */
 let companySub='info',companySelected='';
 const INTRO_FIELDS={jobInterest:['관심 직무','기업에서 관심 있는 부서·직무나 기술 분야를 적어 주세요.'],headline:['나를 소개하는 한 문장','내 특징과 관심 직무를 한 문장으로 적어 주세요.'],motivation:['관심을 갖게 된 이유','이 직무에 관심을 갖게 된 실제 경험을 적어 주세요.'],strength:['나의 강점과 근거','강점을 보여 주는 행동, 상황, 결과를 적어 주세요.'],experience:['프로젝트 및 실습 경험','활동명, 나의 역할, 사용 도구, 어려움과 해결 과정, 결과를 구분해 적어 주세요.'],skills:['배운 기술과 자격증','직접 해 본 기술과 취득·준비 중인 자격증을 구분해 주세요.'],teamSafety:['협업 및 안전 태도','약속 준수, 협업, 문제 보고, 보호구 착용 등의 경험을 적어 주세요.'],goals:['직무체험에서 배우고 싶은 것','알아보고 싶은 업무와 기업에 묻고 싶은 질문을 적어 주세요.'],portfolio:['포트폴리오 링크','기업에 보여 줄 수 있는 노션·Drive 작업물 링크를 넣어 주세요.'],schoolGrade:['학교·학과·학년','예: 경기항공고 로봇자동화과 2학년'],course:['참여 예정 과정','담당교사에게 안내받은 과정명. 아직 모르겠으면 미정'],skillIndependent:['혼자 가능한 도구·작업','직접 해 본 것만 적으세요. 없으면 없음'],skillGuided:['시범 후 가능한 도구·작업','예: 교사 시범 후 기본 PLC 입출력 배선'],skillNew:['아직 경험 없는 도구·작업','처음이라 기업에서 배우고 싶은 작업'],commute:['통근 방법·시간과 기숙사','예: 버스 약 40분, 기숙사 불필요. 상세 주소는 쓰지 마세요.'],availability:['참여 가능한 일정','가능한 날짜·시간, 학교와 조정할 사항. 미정이면 미정']};
 function vCompany(){
