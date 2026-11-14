@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="803932c">
+<meta name="dj-build" content="9ba36a3">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -925,8 +925,57 @@ function allEvents(){
   D.common.items.forEach((e, i) => out.push({ ...e, id: "sc" + i, src:"sheet", kind: "EVT", target: D.common.target, srcLabel: "학생별 일정표 · 공통" + (e.monthOnly ? " (날짜 미정)" : "") }));
   if (isLearner()) (D.assigns || []).forEach(a => ojtDays(a, addDays(TODAY, -62), 200).forEach(e => out.push(e)));
   if (!T() || showPersonal){
-    D.personalApp.forEach(e => out.push({ ...e, kind: "PER", target: "all", src: "pe", title: `[${e.name}] ${e.title}`, srcLabel: "학생 개인일정 · " + e.name }));
-    Object.entries(D.personalSheet).forEach(([name, items]) => (items || []).forEach((e, i) => out.push({ ...e, id: "ps" + name + i, kind: "PER", target: "all", name, src:"personalSheet", title: `[${name}] ${e.title}`, srcLabel: "학생별 일정표" + (e.monthOnly ? " (날짜 미정)" : "") })));
+    const peGroups = new Map();
+    (D.personalApp || []).forEach(e => {
+      const key = [e.date, e.endDate || "", e.time || "", String(e.title || "").trim(), e.note || ""].join("|");
+      if (!peGroups.has(key)) peGroups.set(key, { ...e, names: [e.name], ids: [e.id] });
+      else {
+        const g = peGroups.get(key);
+        if (!g.names.includes(e.name)) g.names.push(e.name);
+        g.ids.push(e.id);
+      }
+    });
+    peGroups.forEach(g => {
+      const nameLabel = g.names.join(", ");
+      out.push({
+        ...g,
+        id: g.ids[0],
+        deleteId: g.ids.join(","),
+        kind: "PER",
+        target: "all",
+        name: nameLabel,
+        names: g.names,
+        src: "pe",
+        title: `[${nameLabel}] ${g.title}`,
+        srcLabel: "학생 개인일정 · " + nameLabel
+      });
+    });
+    const psGroups = new Map();
+    Object.entries(D.personalSheet || {}).forEach(([name, items]) => {
+      (items || []).forEach((e, i) => {
+        const key = [e.date, e.endDate || "", String(e.title || "").trim(), e.monthOnly ? "1" : "0"].join("|");
+        if (!psGroups.has(key)) psGroups.set(key, { ...e, names: [name], ids: ["ps" + name + i] });
+        else {
+          const g = psGroups.get(key);
+          if (!g.names.includes(name)) g.names.push(name);
+          g.ids.push("ps" + name + i);
+        }
+      });
+    });
+    psGroups.forEach(g => {
+      const nameLabel = g.names.join(", ");
+      out.push({
+        ...g,
+        id: g.ids[0],
+        kind: "PER",
+        target: "all",
+        name: nameLabel,
+        names: g.names,
+        src: "personalSheet",
+        title: `[${nameLabel}] ${g.title}`,
+        srcLabel: "학생별 일정표" + (g.monthOnly ? " (날짜 미정)" : "")
+      });
+    });
   }
   return out;
 }
@@ -966,7 +1015,7 @@ function evRow(e,options){
   const sourceSheet=e.src==="company"?(D.companyResources||{}).sheetUrl:D.sheetUrl;
   if(T()&&sourceSheet&&["sheet","personalSheet","company"].includes(e.src))actions+='<a class="btn sm ghost" href="'+esc(sourceSheet)+'" target="_blank" rel="noopener">원본 시트에서 수정·삭제</a>';
   if (e.src === "app" && T()) actions += `<button class="btn sm ghost" data-editev="${esc(e.id)}">수정</button><button class="btn sm ghost danger" data-del="events|${esc(e.id)}">삭제</button>`;
-  if (e.src === "pe" && (T() || (e.name === D.me.name && e.by === "학생"))) actions += `<button class="btn sm ghost" data-editpe="${esc(e.id)}">수정</button><button class="btn sm ghost danger" data-delpe="${esc(e.id)}">삭제</button>`;
+  if (e.src === "pe" && (T() || ((e.names ? e.names.includes(D.me.name) : e.name === D.me.name) && e.by === "학생"))) actions += `<button class="btn sm ghost" data-editpe="${esc(e.id)}">수정</button><button class="btn sm ghost danger" data-delpe="${esc(e.deleteId || e.id)}">삭제</button>`;
   return `<div class="ev">${options&&options.hideDate?"":`<div class="ev-date"><time datetime="${esc(e.date)}">${eventDateHtml(e.date)}</time></div>`}
     <div><div class="ev-t"><i class="kdot" style="background:var(${isHolidayEvent(e)?"--bad":x.v})"></i>${esc(e.title)} ${e.targets?e.targets.map(targetChip).join(" "):targetChip(e.target)}</div>
     <div class="ev-s">${esc(e.srcLabel || x.label)}${e.time ? ` · ${esc(e.time)}` : ""}${e.place ? ` · ${esc(e.place)}` : ""}${range ? ` · ${esc(fmtMD(e.date))}${esc(range)}` : ""}</div>
