@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="b2ff31e">
+<meta name="dj-build" content="d1391c0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -685,7 +685,7 @@ document.addEventListener('click',async e=>{
 let introDeepPending=location.hash==='#intro';
 function setData(d){ if(d){const moved=(d.notices||[]).filter(noticeReadingInfo);d.contestResources=orderNoticeReading([...new Map([...(d.contestResources||[]),...moved].map(n=>[n.id,n])).values()]);d.notices=(d.notices||[]).filter(n=>!noticeReadingInfo(n));} if(d&&d.homeOnly&&!d.fromCache)saveHome(d); if(!d.homeOnly)fullLoadError=""; $("#startupScreen").hidden=true; if(!D)tab=tab==="school"?"school":"today"; D = d;queueMicrotask(resumePersonalNotion);resourceLinkError=""; TODAY = D.today || TODAY; showUpdated(); render(); if(introDeepPending){introDeepPending=false;queueMicrotask(openIntroEntry);} }
 function showUpdated(){const el=$("#updAt"),u=D&&D.lastUpdate;if(!el)return;if(D&&D.fromCache){el.innerHTML='<span class="update-time">저장된 화면</span> <span class="update-summary">· 최신 자료 받는 중 <b>'+(performance.now()/1000).toFixed(1)+'초</b></span>';el.hidden=false;clearTimeout(showUpdated.t);showUpdated.t=setTimeout(showUpdated,200);return;}if(!u||!u.at){el.textContent="";el.hidden=true;return;}const day=u.at.slice(0,10),hm=u.at.slice(11,16),label="최근 업데이트 "+(day===TODAY?"오늘":Number(day.slice(5,7))+"."+Number(day.slice(8,10)))+(hm?" "+hm:"");el.innerHTML='<span class="update-time">'+esc(label)+'</span>'+(u.what?' <span class="update-summary">· '+esc(u.what)+'</span>':"");el.hidden=false;}
-async function reload(){ drvStale(); const epoch=fullLoadEpoch,owner=JSON.stringify(cred||{});try { const data=await call("load", {deferLinks:true,homeOnly:!!(D&&D.homeOnly)});if(epoch!==fullLoadEpoch||owner!==JSON.stringify(cred||{}))return;if(data.homeOnly&&D&&!D.homeOnly)return;setData(data); } catch (e) { if (/PIN|비밀번호|이름|로그인|등록된/.test(e.message)) { logout(e.message); } else toast(e.message); } }
+async function reload(freshSchedule=false){ drvStale(); const epoch=fullLoadEpoch,owner=JSON.stringify(cred||{});try { const data=await call("load", {deferLinks:true,homeOnly:!!(D&&D.homeOnly),freshSchedule:freshSchedule===true});if(epoch!==fullLoadEpoch||owner!==JSON.stringify(cred||{}))return;if(data.homeOnly&&D&&!D.homeOnly)return;setData(data); } catch (e) { if (/PIN|비밀번호|이름|로그인|등록된/.test(e.message)) { logout(e.message); } else toast(e.message); } }
 async function act(action, payload, msg){
   if(isViewer()){toast("보기 전용입니다. 로그인하면 쓸 수 있습니다.");return false;}
   try { const r = await callRaw(action, payload, null, true); if (msg) toast(msg); if (r.load) setData(r.load); else await reload(); return true; }
@@ -849,7 +849,7 @@ $('#main').addEventListener('click',e=>{
  if((x.boardBack!==undefined||x.companyBack!==undefined||x.noticeBack!==undefined)&&navHistory.length){e.stopImmediatePropagation();return backNav();}
  if(x.boardOpen||x.companyOpen||x.certSelect||x.noticeOpen||x.noticeRelated||x.contestPost||x.certInfo){pushNav();navCaptured=true;queueMicrotask(()=>{navCaptured=false;});}
 },true);
-$("#refreshTop").onclick=()=>reload();
+$("#refreshTop").onclick=()=>reload(true);
 $('#profileTop').onclick=()=>{navHistory=[];go('me');};
 window.addEventListener('wheel',()=>{navAnchor='';},{passive:true});window.addEventListener('touchmove',()=>{navAnchor='';},{passive:true});
 $("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) { boardOpen = null; go(b.dataset.tab,{top:true}); } });
@@ -957,7 +957,7 @@ function contestBoardFields(p){return '<div id="contestFields" '+(p.category==='
 function contestBoardDetails(p){if(p.category!=='대회')return '';return '<div class="panel pad" style="margin:12px 0"><h3>대회 정보·일정</h3><div class="ev-s">'+esc(p.organizer||'주최기관 미입력')+(p.place?' · '+esc(p.place):'')+'</div><p>접수: '+esc(p.applyStart?fmtMD(p.applyStart):'시작일 미정')+' ~ '+esc(p.applyEnd?fmtMD(p.applyEnd):'마감일 미정')+'<br>개최: '+esc(p.date?fmtMD(p.date):'날짜 미정')+(p.eventEnd?' ~ '+esc(fmtMD(p.eventEnd)):'')+'</p><button class="btn sm" data-contest-calendar="'+esc(p.id)+'">일정 달력 보기</button></div>';}
 
 function personalScheduleKey(e){
- const norm=v=>String(v||"").normalize("NFKC").replace(/\s+/g," ").trim();
+ const norm=v=>String(v||"").normalize("NFKC").replace(/[\u200B\u2060\uFEFF]/g,"").replace(/\s+/g," ").trim();
  return JSON.stringify([e.date,e.endDate||e.date,norm(e.time).replace(/\s/g,"").replace(/[–—~]/g,"-"),norm(e.title).replace(/\s/g,""),norm(e.note),Boolean(e.monthOnly)]);
 }
 
