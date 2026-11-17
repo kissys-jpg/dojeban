@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="de11871">
+<meta name="dj-build" content="f735aca">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -429,6 +429,12 @@ main{max-width:960px;margin:auto;padding:20px 16px;box-sizing:border-box}.startu
 .home-events{border-color:#b9d4ef;border-top:4px solid #286aa7}.home-events>.pad .label{color:#205c93;font-weight:700}
 .home-meal{border-color:#b7dccc;border-top:4px solid #287d59}.home-meal>.pad .label{color:#206747;font-weight:700}
 .career-notion{overflow-wrap:anywhere}.career-notion h2,.career-notion h3,.career-notion h4{margin:16px 0 10px}.career-notion p{white-space:pre-wrap;margin:10px 0}.career-notion pre{white-space:pre-wrap;padding:12px;background:var(--sunk)}.career-notion blockquote{margin:12px 0;padding:8px 12px;border-left:3px solid var(--line)}.career-list{padding-left:16px;margin:6px 0}.career-table{overflow:auto}.career-table table{border-collapse:collapse}.career-table td{border:1px solid var(--line);padding:8px;min-width:90px}
+
+.home-soon{border-color:#b6dadd;border-top:4px solid #287c86}.home-soon>.pad .label{color:#21636c;font-weight:700}
+.today-focus>[data-today-panel=tasks]{border-color:#ecd0b5;border-top:4px solid #a95b27}.today-focus>[data-today-panel=tasks]>h3{color:#85441c}
+.today-focus>[data-today-panel=results]{border-color:#cbd2df;border-top:4px solid #5c6c85}.today-focus>[data-today-panel=results]>h3{color:#46546a}
+.today-focus>[data-today-panel=team]{border-color:#cbc9ec;border-top:4px solid #6557a3}.today-focus>[data-today-panel=team]>.row>h3{color:#53458a}
+.home-contests{border-color:#e6d6a8;border-top:4px solid #98751c}.home-contests>.row>h3{color:#785b12}
 </style>
 </head>
 <body>
@@ -936,7 +942,7 @@ function contestCard(x){
 }
 function todayContests(){
   const list = upcomingContests().slice(0, 3); if (!list.length) return "";
-  return `<section class="panel pad"><div class="row"><h3 style="margin:0">다가오는 대회</h3><span class="spacer"></span><button class="btn sm ghost" data-go-contests>전체 보기</button></div>${list.map(contestCard).join("")}</section>`;
+  return `<section class="panel pad home-contests"><div class="row"><h3 style="margin:0">다가오는 대회</h3><span class="spacer"></span><button class="btn sm ghost" data-go-contests>전체 보기</button></div>${list.map(contestCard).join("")}</section>`;
 }
 function vContests(){
   const up = upcomingContests(), ids = new Set(up.map(x => x.p.id)), past = (D.boardPosts || []).filter(p => p.category === "대회" && !ids.has(p.id));
@@ -1456,7 +1462,7 @@ function vToday(){
     meal:()=>todayMeal(),
     focus:()=>D.homeOnly?"":'<div class="today-focus" aria-label="오늘 확인할 일">'+todayActions()+todayResults()+todayTeamNews()+'</div>',
     events:()=>`<div class="grid2"><section class="panel home-events"><div class="pad" style="padding-bottom:4px"><span class="label">오늘 일정</span></div>${todays.length ? eventList(todays,TODAY) : emptyBox("오늘 잡힌 일정이 없습니다")}</section>
-    <section class="panel"><div class="pad" style="padding-bottom:4px"><span class="label">앞으로 2주</span></div>${soon.length ? eventList(soon.slice(0, 8)) : emptyBox("2주 안에 예정된 일정이 없습니다")}</section></div>`,
+    <section class="panel home-soon"><div class="pad" style="padding-bottom:4px"><span class="label">앞으로 2주</span></div>${soon.length ? eventList(soon.slice(0, 8)) : emptyBox("2주 안에 예정된 일정이 없습니다")}</section></div>`,
     contests:()=>todayContests(),
     details:()=>(D.homeOnly&&!isGuest())?'<section class="panel pad"><button class="btn" data-home-details>'+ (fullLoadPending?'활동 자료 확인 중…':'내 할 일·요청 결과·팀 소식 보기')+'</button><p class="ev-s">명단·출결·BOM 등은 메뉴를 열 때 불러옵니다.</p></section>':""
   };
