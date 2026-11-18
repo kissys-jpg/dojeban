@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="e4bfaba">
+<meta name="dj-build" content="61e2d02">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -829,7 +829,7 @@ function go(k,options={}){
   if(k==='notices'){noticeQuery='';noticeFilter='all';}
   if(k==='materials'){matQ='';matCategory='all';materialOpen=null;}
   if(k==='projects')projSub='overview';
-  if(k==='company'){companySub='info';companySelected='';}
+  if(k==='company'){companySub='info';companySelected='';careerNotionDepartment=true;careerNotionSelected='';careerNotionReset();}
   if(k==='contest'){certSelected='';certView='schedule';}
   if(k==='schedule')schedMode='cal';
   if(k==='learner')learnerTab='training';
@@ -1250,7 +1250,7 @@ let accountMediaEpoch=0;
 function mediaOwner(){return accountMediaEpoch+"|"+JSON.stringify(cred||{});}
 function checkMediaOwner(owner){if(owner!==mediaOwner())throw Error("계정이 변경되어 자료 불러오기를 중단했습니다");}
 function resetAccountMedia(){
- accountMediaEpoch++;careerNotionSelected='';notionResumePending=false;careerNotionReset();
+ accountMediaEpoch++;careerNotionDepartment=true;careerNotionSelected='';notionResumePending=false;careerNotionReset();
  [fileImageObserver,noticeObserver,inlineVideoObserver,photoObserver].forEach(o=>{if(o)o.disconnect();});
  document.querySelectorAll("video").forEach(v=>{v.pause();v.removeAttribute("src");v.load();});
  inlineVideos.forEach(u=>URL.revokeObjectURL(u));inlineVideos.clear();inlineVideoLoading.clear();
@@ -1928,20 +1928,20 @@ function vOjtCalendar(){
     `<section class="panel" style="overflow:hidden"><div class="cal-head"><button class="btn sm" data-ojt-month="-1" aria-label="OJT 이전 달">‹</button><h3 class="num">${y}. ${pad(m+1)}</h3><button class="btn sm" data-ojt-month="1" aria-label="OJT 다음 달">›</button><span class="spacer"></span><button class="btn sm ghost" data-ojt-month="0">오늘</button></div><div class="cal">${DOW.map((d,i)=>`<div class="cal-dow ${i===0?'sun':i===6?'sat':''}">${d}</div>`).join('')}${cells}</div></section><section class="panel"><div class="pad"><b>${esc(fmtMD(ojtSelected))} · OJT</b></div>${selected.length?selected.map(e=>`<div class="pad">${T()&&e.name?'<b>'+esc(e.name)+'</b>':''}${evRow(e)}</div>`).join(''):emptyBox('이날 OJT 일정이 없습니다',T()?'도제훈련의 배정 수정에서 OJT 요일·기간·시간을 정하거나 OJT 일정을 추가하세요.':'선생님이 훈련 배정을 등록하면 표시됩니다.')}</section>`;
 }
 /* ---------- 학생별 노션 포트폴리오 ---------- */
-let careerNotionSelected='',careerNotionData=null,careerNotionPending=false,careerNotionError='',careerNotionTicket=0;
+let careerNotionDepartment=true,careerNotionSelected='',careerNotionData=null,careerNotionPending=false,careerNotionError='',careerNotionTicket=0;
 function careerNotionReset(){careerNotionTicket++;careerNotionData=null;careerNotionPending=false;careerNotionError='';}
 function careerRich(a){return(a||[]).map(t=>{let s=esc(t.text);if(t.code)s='<code>'+s+'</code>';if(t.bold)s='<strong>'+s+'</strong>';if(t.italic)s='<em>'+s+'</em>';return s;}).join('');}
 function careerBlocks(nodes){return(nodes||[]).map(n=>{const t=careerRich(n.text),nested=careerBlocks(n.children);if(n.originalOnly)return '<p class="ev-s">'+esc(n.title||'첨부·외부 콘텐츠')+' · 이 자료 형식은 본문 보기에서 아직 지원하지 않습니다.</p>';if(/^heading_[123]$/.test(n.type)){const tag='h'+(Number(n.type.slice(-1))+1);return '<'+tag+'>'+t+'</'+tag+'>'+nested;}if(n.type==='divider')return '<hr>';if(n.type==='table')return '<div class="career-table"><table><tbody>'+nested+'</tbody></table></div>';if(n.type==='table_row')return '<tr>'+(n.cells||[]).map(c=>'<td>'+careerRich(c)+'</td>').join('')+'</tr>';if(n.type==='code')return '<pre>'+t+'</pre>'+nested;if(n.type==='bulleted_list_item'||n.type==='numbered_list_item')return '<div class="career-list">'+(n.type==='numbered_list_item'?'1. ':'• ')+t+nested+'</div>';if(n.type==='to_do')return '<p>'+(n.checked?'☑ ':'☐ ')+t+'</p>'+nested;if(n.type==='quote'||n.type==='callout')return '<blockquote>'+t+nested+'</blockquote>';if(n.type==='toggle')return '<details><summary>'+t+'</summary>'+nested+'</details>';return(t?'<p>'+t+'</p>':'')+nested;}).join('');}
 function vCareerNotion(){
  if(isGuest()||isViewer())return extraHead('노션 포트폴리오','로그인하면 본인 포트폴리오를 볼 수 있습니다.');
  const d=careerNotionData,student=T()?careerNotionSelected:D.me.name,personal=!!(d&&d.personal);
- const manage=(A()?'<button class="btn" data-career-notion-connect>기본 예시 연결</button><button class="btn" data-notion-app-settings>노션 연결 앱 설정</button>':'')+(student?'<button class="btn" data-notion-edit="'+esc(student)+'">'+(T()?'선택 학생 주소':'내 노션 주소')+'</button>':'');
- const picker=T()?'<label class="fld"><span>포트폴리오 선택</span><select id="careerNotionStudent">'+opt('',careerNotionSelected,'기본 예시')+(D.roster||[]).map(s=>opt(s.name,careerNotionSelected,s.name)).join('')+'</select></label>':'';
+ const manage=(A()?'<button class="btn" data-career-notion-connect>학과 노션 연결</button><button class="btn" data-notion-app-settings>노션 연결 앱 설정</button>':'')+(student?'<button class="btn" data-notion-edit="'+esc(student)+'">'+(T()?'선택 학생 주소':'내 노션 주소')+'</button>':'');
+ const picker=T()?'<label class="fld"><span>포트폴리오 선택</span><select id="careerNotionStudent">'+opt('',careerNotionSelected,'학과 노션')+(D.roster||[]).map(s=>opt(s.name,careerNotionSelected,s.name)).join('')+'</select></label>':'<div class="row" style="margin-bottom:12px"><button class="btn" data-career-notion-mode="department" aria-pressed="'+careerNotionDepartment+'">학과 노션</button><button class="btn" data-career-notion-mode="personal" aria-pressed="'+!careerNotionDepartment+'">내 포트폴리오</button></div>';
  const actions=d&&personal?'<div class="row" style="margin:12px 0"><a class="btn" href="'+esc(safeUrl(d.url))+'" target="_blank" rel="noopener noreferrer">노션 원본 열기 ↗</a><button class="btn pri" data-personal-notion-start="'+esc(student)+'" '+(d.oauthReady?'':'disabled')+'>'+(d.connected?'노션 접근 다시 승인':'노션 접근 승인')+'</button>'+(d.connected?'<button class="btn ghost" data-personal-notion-disconnect="'+esc(student)+'">본문 연결 해제</button>':'')+'</div>':'';
- const hint=personal?'본인과 선생님만 볼 수 있는 개인 포트폴리오입니다.':student?'개인 노션을 아직 등록하지 않아 기본 예시를 보여 줍니다.':'선생님이 정한 기본 예시입니다.';
+ const hint=careerNotionDepartment?'학과의 공통 노션 페이지입니다.':personal?'본인과 선생님만 볼 수 있는 개인 포트폴리오입니다.':student?'개인 노션을 아직 등록하지 않아 기본 예시를 보여 줍니다.':'선생님이 정한 기본 예시입니다.';
  return extraHead('노션 포트폴리오',hint,manage)+picker+'<section class="panel pad career-notion" aria-label="노션 포트폴리오 본문">'+actions+(careerNotionError?'<p role="alert">'+esc(careerNotionError)+'</p><button class="btn" data-career-notion-retry>다시 불러오기</button>':!d?'<p role="status">노션을 읽는 중…</p>':!d.configured?emptyBox('기본 예시가 아직 연결되지 않았습니다','개인 노션 주소를 등록하거나 관리자가 기본 예시를 설정해 주세요.'):!d.connected?emptyBox(personal?'개인 노션 주소가 등록됐습니다':'기본 예시의 노션 읽기 연결이 필요합니다',personal?(d.oauthReady?'노션 접근 승인을 눌러 본인 페이지를 선택하면 알림판 안에서 읽을 수 있습니다.':'원본은 노션에서 열 수 있습니다. 알림판 본문 연결은 관리자의 노션 연결 앱 설정이 필요합니다.'):'관리자가 기본 페이지의 읽기 연결을 설정하면 본문이 보입니다. 웹 공개는 필요 없습니다.'):'<h2>'+esc(d.title)+'</h2>'+careerBlocks(d.blocks)+(d.truncated?'<p class="ev-s">자료가 길어 일부만 표시했습니다.</p>':''))+'</section>';
 }
-function hydrateCareerNotion(){if(tab!=='careerNotion'||isGuest()||isViewer()||careerNotionPending||careerNotionData||careerNotionError)return;const owner=mediaOwner(),ticket=careerNotionTicket;careerNotionPending=true;call('careerNotion',T()?{name:careerNotionSelected}:{}).then(d=>{if(ticket!==careerNotionTicket||owner!==mediaOwner())return;careerNotionData=d;}).catch(e=>{if(ticket===careerNotionTicket&&owner===mediaOwner())careerNotionError=e.message;}).finally(()=>{if(ticket!==careerNotionTicket||owner!==mediaOwner())return;careerNotionPending=false;if(tab==='careerNotion')render();});}
+function hydrateCareerNotion(){if(tab!=='careerNotion'||isGuest()||isViewer()||careerNotionPending||careerNotionData||careerNotionError)return;const owner=mediaOwner(),ticket=careerNotionTicket;careerNotionPending=true;call('careerNotion',careerNotionDepartment?{scope:'department'}:T()?{name:careerNotionSelected}:{}).then(d=>{if(ticket!==careerNotionTicket||owner!==mediaOwner())return;careerNotionData=d;}).catch(e=>{if(ticket===careerNotionTicket&&owner===mediaOwner())careerNotionError=e.message;}).finally(()=>{if(ticket!==careerNotionTicket||owner!==mediaOwner())return;careerNotionPending=false;if(tab==='careerNotion')render();});}
 async function personalNotionStart(name){
  const owner=mediaOwner(),popup=window.open('about:blank','_blank');if(popup)popup.opener=null;
  try{const r=await call('startPersonalNotion',{name:T()?name:D.me.name});checkMediaOwner(owner);notionResumeTicket='';if(popup)popup.location.href=r.url;else openDlg('노션 접근 승인','<a class="btn pri" href="'+esc(safeUrl(r.url))+'" target="_blank" rel="noopener noreferrer">노션에서 본인 페이지 선택</a>','닫기',()=>true);}catch(e){if(popup)popup.close();toast(e.message);}
@@ -1949,14 +1949,15 @@ async function personalNotionStart(name){
 async function resumePersonalNotion(){
  if(!notionResumeTicket||!D||D.fromCache||isGuest()||isViewer()||notionResumePending||notionResumeOwner===mediaOwner())return;
  const owner=mediaOwner();notionResumeOwner=owner;notionResumePending=true;
- try{const r=await call('finishPersonalNotion',{ticket:notionResumeTicket});checkMediaOwner(owner);notionResumeTicket='';careerNotionSelected=T()?r.name||'':'';careerNotionReset();go('careerNotion',{top:true});toast('본인 노션 연결을 완료했습니다');}catch(e){if(owner===mediaOwner())toast(e.message);}finally{if(owner===mediaOwner())notionResumePending=false;}
+ try{const r=await call('finishPersonalNotion',{ticket:notionResumeTicket});checkMediaOwner(owner);notionResumeTicket='';careerNotionDepartment=false;careerNotionSelected=T()?r.name||'':'';careerNotionReset();go('careerNotion',{top:true});toast('본인 노션 연결을 완료했습니다');}catch(e){if(owner===mediaOwner())toast(e.message);}finally{if(owner===mediaOwner())notionResumePending=false;}
 }
 async function notionAppSettingsDlg(){
  try{const owner=mediaOwner(),s=await call('notionOAuthSettings');checkMediaOwner(owner);openDlg('학생 노션 연결 앱 설정','<p><a class="btn" href="'+esc('https:'+'/'+'/app.notion.com/developers/connections')+'" target="_blank" rel="noopener noreferrer">노션에서 연결 앱 만들기</a></p>'+field('Notion OAuth Client ID','clientId',s.clientId,'text','autocomplete="off"')+field('Notion OAuth Client secret (바꿀 때만 입력)','secret','','password','autocomplete="off" placeholder="'+(s.secretSet?'저장됨':'Notion 개발자 앱 설정에서 확인')+'"')+'<p class="ev-s">Notion 개발자 설정에서 OAuth 연결 앱을 한 번 만들고 콘텐츠 읽기 권한만 설정하세요. 학생은 각자의 비공개 페이지를 선택해 승인합니다. 앱을 만든다는 뜻이며 학생 페이지를 웹에 공개하는 것이 아닙니다.</p><label class="fld"><span>Notion 앱에 등록할 Redirect URI</span><input readonly value="'+esc(s.redirect)+'"></label>','저장',async fd=>{const input=form.querySelector('[name=secret]');const ok=await act('notionOAuthSettings',{...fd,save:true},'학생 노션 연결 앱 설정을 저장했습니다');if(input)input.value='';fd.secret='';if(ok){careerNotionReset();render();}return ok;});}catch(e){toast(e.message);}
 }
-function careerNotionDlg(){openDlg('비공개 기본 예시 연결',field('학과 노션 페이지 주소','url',careerNotionData&&careerNotionData.url||'','url','maxlength="1000"')+field('노션 읽기 연결 토큰 (저장 후에는 바꿀 때만 입력)','token','','password','autocomplete="off"')+'<p class="ev-s">노션에서 해당 페이지에 연결의 읽기 권한을 추가해 주세요. 웹에 게시하지 않아도 됩니다. 기존 연동 설정의 노션 토큰도 사용할 수 있습니다. 연결된 학과 페이지 본문은 알림판에 로그인한 사용자에게 표시됩니다.</p>','저장',async fd=>{const tokenInput=form.querySelector('[name=token]');const ok=await act('saveCareerNotion',fd,'학과 노션 연결을 저장했습니다');if(tokenInput)tokenInput.value='';fd.token='';if(ok){careerNotionReset();render();}return ok;});}
+function careerNotionDlg(){openDlg('비공개 학과 노션 연결',field('학과 노션 페이지 주소','url',careerNotionDepartment&&careerNotionData&&careerNotionData.url||'','url','maxlength="1000"')+field('노션 읽기 연결 토큰 (저장 후에는 바꿀 때만 입력)','token','','password','autocomplete="off"')+'<p class="ev-s">노션에서 해당 페이지에 연결의 읽기 권한을 추가해 주세요. 웹에 게시하지 않아도 됩니다. 기존 연동 설정의 노션 토큰도 사용할 수 있습니다. 연결된 학과 페이지 본문은 알림판에 로그인한 사용자에게 표시됩니다.</p>','저장',async fd=>{const tokenInput=form.querySelector('[name=token]');const ok=await act('saveCareerNotion',fd,'학과 노션 연결을 저장했습니다');if(tokenInput)tokenInput.value='';fd.token='';if(ok){careerNotionReset();render();}return ok;});}
 
-document.addEventListener('change',e=>{if(e.target.id==='careerNotionStudent'&&T()){careerNotionSelected=e.target.value;careerNotionReset();render();}});
+document.addEventListener('change',e=>{if(e.target.id==='careerNotionStudent'&&T()){careerNotionSelected=e.target.value;careerNotionDepartment=!careerNotionSelected;careerNotionReset();render();}});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-career-notion-mode]');if(!b||!D||isGuest()||isViewer())return;careerNotionDepartment=b.dataset.careerNotionMode==='department';careerNotionReset();render();});
 function notionPortfolioBox(){
   const pages=D.notionPortfolios||[];
   return '<section class="panel"><div class="pad row"><h3>노션 포트폴리오</h3><span class="spacer"></span><button class="btn" data-notion-edit="">'+(T()?'학생 노션 연결':'내 노션 연결')+'</button></div>'+pages.filter(p=>p.url).map(p=>'<div class="pad row"><b>'+esc(T()?p.name:'내 포트폴리오')+'</b><span class="spacer"></span><button class="btn pri" data-notion-view="'+esc(p.name)+'">알림판에서 보기</button><a class="btn" href="'+esc(safeUrl(p.url))+'" target="_blank" rel="noopener noreferrer">노션 열기 ↗</a><button class="btn sm" data-notion-edit="'+esc(p.name)+'">주소 수정</button></div>').join('')+(pages.some(p=>p.url)?'':emptyBox('노션 포트폴리오 주소를 연결해 주세요','노션 페이지 주소를 저장하면 여기에서 바로 열 수 있습니다.'))+'</section>';
@@ -2944,7 +2945,7 @@ $("#main").addEventListener("click", e => {
   if(d.notionAppSettings!==undefined&&A())return notionAppSettingsDlg();
   if(d.personalNotionStart!==undefined)return personalNotionStart(d.personalNotionStart);
   if(d.personalNotionDisconnect!==undefined){if(!arm(t,'pn-disconnect'))return;return act('disconnectPersonalNotion',{name:T()?d.personalNotionDisconnect:D.me.name},'노션 본문 연결을 해제했습니다').then(ok=>{if(ok){careerNotionReset();render();}});}
-  if(d.notionView!==undefined){careerNotionSelected=T()?d.notionView:'';careerNotionReset();return go('careerNotion');}
+  if(d.notionView!==undefined){careerNotionDepartment=false;careerNotionSelected=T()?d.notionView:'';careerNotionReset();return go('careerNotion');}
   if(d.careerNotionConnect!==undefined)return careerNotionDlg();
   if(d.careerNotionRetry!==undefined){careerNotionReset();return render();}
   if (d.notionEdit !== undefined)return notionPortfolioDlg(d.notionEdit);
