@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="b89db29">
+<meta name="dj-build" content="ef3fd20">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1322,7 +1322,7 @@ function contestStudyMaterials(){
 }
 function vContestTop(){if(boardOpen){const p=(D.boardPosts||[]).find(p=>p.id===boardOpen);return vBoard()+(isContentSchoolContest(p)?contestStudyMaterials():'');}return vContests()+contestStudyMaterials();}
 function vStudyRoom(){
- const slash=String.fromCharCode(47,47),links=[['디지털논리회로','논리회로 학습실','script.google.com/macros/s/AKfycbyC_P1CNQ9out5BqKgTd3Ad3ONLwp5sM1gBqeAmQIaY8axkOJMw24e0jUeFAlH5fYHf/exec#class'],['외부평가','전자기기생산 L2 외부평가 학습실','electronics-l2-learning-20261112.workspace-044344.chatgpt.site/']];
+ const slash=String.fromCharCode(47,47),links=[['디지털논리회로','논리회로 학습실','script.google.com/macros/s/AKfycbyC_P1CNQ9out5BqKgTd3Ad3ONLwp5sM1gBqeAmQIaY8axkOJMw24e0jUeFAlH5fYHf/exec#class'],['외부평가','전자기기생산 L2 외부평가 학습실','electronics-l2-learning.electronics-l2-learning.workers.dev/']];
  return extraHead('학습실','필요한 과목을 선택해 학습을 시작하세요.','<button class="btn" data-study-tools data-go="tools">무료 도구</button>')+'<div class="grid2">'+links.map(([name,desc,host])=>'<section class="panel pad"><h2>'+name+'</h2><p>'+desc+'</p><a class="btn pri" href="https:'+slash+host+'" target="_blank" rel="noopener noreferrer">'+name+' 학습실 열기 <span class="ev-s">(새 창)</span></a></section>').join('')+'</div>';
 }
 /* 자격증: 종목별 일정·자료실·준비 게시글 */
