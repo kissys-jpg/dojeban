@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="ef3fd20">
+<meta name="dj-build" content="e84354c">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -435,6 +435,10 @@ main{max-width:960px;margin:auto;padding:20px 16px;box-sizing:border-box}.startu
 .today-focus>[data-today-panel=results]{border-color:#cbd2df;border-top:4px solid #5c6c85}.today-focus>[data-today-panel=results]>h3{color:#46546a}
 .today-focus>[data-today-panel=team]{border-color:#cbc9ec;border-top:4px solid #6557a3}.today-focus>[data-today-panel=team]>.row>h3{color:#53458a}
 .home-contests{border-color:#e6d6a8;border-top:4px solid #98751c}.home-contests>.row>h3{color:#785b12}
+.study-room-access{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px}
+.study-room-access>.btn{justify-self:start;white-space:normal}
+.study-room-qr{margin:0;text-align:center;font-size:.81rem;color:inherit}
+.study-room-qr img{display:block;width:144px;height:144px;background:#fff;border-radius:4px;image-rendering:pixelated}
 </style>
 </head>
 <body>
@@ -1323,7 +1327,12 @@ function contestStudyMaterials(){
 function vContestTop(){if(boardOpen){const p=(D.boardPosts||[]).find(p=>p.id===boardOpen);return vBoard()+(isContentSchoolContest(p)?contestStudyMaterials():'');}return vContests()+contestStudyMaterials();}
 function vStudyRoom(){
  const slash=String.fromCharCode(47,47),links=[['디지털논리회로','논리회로 학습실','script.google.com/macros/s/AKfycbyC_P1CNQ9out5BqKgTd3Ad3ONLwp5sM1gBqeAmQIaY8axkOJMw24e0jUeFAlH5fYHf/exec#class'],['외부평가','전자기기생산 L2 외부평가 학습실','electronics-l2-learning.electronics-l2-learning.workers.dev/']];
- return extraHead('학습실','필요한 과목을 선택해 학습을 시작하세요.','<button class="btn" data-study-tools data-go="tools">무료 도구</button>')+'<div class="grid2">'+links.map(([name,desc,host])=>'<section class="panel pad"><h2>'+name+'</h2><p>'+desc+'</p><a class="btn pri" href="https:'+slash+host+'" target="_blank" rel="noopener noreferrer">'+name+' 학습실 열기 <span class="ev-s">(새 창)</span></a></section>').join('')+'</div>';
+ const l2Qr='<figure class="study-room-qr"><img width="144" height="144" src="data:image/png;base64,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" alt="전자기기생산 L2 학생용 학습실 접속 QR"><figcaption>휴대폰으로 스캔</figcaption></figure>';
+ return extraHead('학습실','필요한 과목을 선택해 학습을 시작하세요.','<button class="btn" data-study-tools data-go="tools">무료 도구</button>')+'<div class="grid2">'+links.map(([name,desc,host])=>{
+  const open='<a class="btn pri" href="https:'+slash+host+'" target="_blank" rel="noopener noreferrer">'+name+' 학습실 열기 <span class="ev-s">(새 창)</span></a>';
+  const access=name==='외부평가'?'<div class="study-room-access">'+open+l2Qr+'</div>':open;
+  return '<section class="panel pad"><h2>'+name+'</h2><p>'+desc+'</p>'+access+'</section>';
+ }).join('')+'</div>';
 }
 /* 자격증: 종목별 일정·자료실·준비 게시글 */
 let certSelected='',certView='schedule';
