@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="d2d45b5">
+<meta name="dj-build" content="ca443e7">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -425,7 +425,7 @@ main{max-width:960px;margin:auto;padding:20px 16px;box-sizing:border-box}.startu
 
 
 
-.home-activity-videos{border-color:#ead0b6;border-top:4px solid #ac591f}.home-activity-videos .label{color:#854114;font-weight:700}
+.home-activity-videos{border-color:#ead0b6;border-top:4px solid #ac591f}.home-activity-videos .label{color:#854114;font-weight:700;margin:0}.activity-feed-post{padding:16px;border-top:1px solid var(--line)}.activity-feed-post h3{margin:4px 0 12px;overflow-wrap:anywhere}.activity-feed-more{margin:12px 16px}
 .home-notices{border-color:#d4c6ef;border-top:4px solid #7652a7}.home-notices>.row .label,.home-notices>.pad .label{color:#694394;font-weight:700}
 .home-events{border-color:#b9d4ef;border-top:4px solid #286aa7}.home-events>.pad .label{color:#205c93;font-weight:700}
 .home-meal{border-color:#b7dccc;border-top:4px solid #287d59}.home-meal>.pad .label{color:#206747;font-weight:700}
@@ -670,13 +670,51 @@ function checkSharedItem(){
  if(!item){noticeOpen=null;boardOpen=null;materialOpen=null;toast('해당 글이 삭제되었거나 볼 수 있는 권한이 없습니다.');return;}
  if(r.kind==='board'){tab=item.category==='대회'?'contest':item.category==='자격증'?'cert':'projects';projSub='board';}
 }
-function syncShareAddress(){
- if(notionResumeTicket)return;
- if(sharePending||(location.hash==='#intro'&&introDeepPending))return;
- const r=currentShareRoute(),hash='#'+r.kind+'/'+r.id;
- try{if(location.hash!==hash)history.replaceState(null,'',hash);}catch{}
+const appHistoryEntries=new Map();
+const appHistorySession=Date.now().toString(36)+Math.random().toString(36).slice(2);
+let appHistoryId=0,appHistoryCurrent=null,appHistoryReplace=false;
+function browserRouteKey(v){
+ if(v.boardOpen&&['board','projects','contest','cert'].includes(v.tab))return 'board:'+v.boardOpen;
+ const detail={projects:[v.projSub||'overview',v.projSub==='board'?v.boardFilter:''],notices:[v.noticeOpen],contest:[v.noticeOpen],cert:[v.certSelected,v.certView],company:[v.companySub,v.companySelected],careerNotion:[v.department,v.notionStudent],schedule:[v.schedMode],materials:[v.materialOpen],photos:[v.album],anon:[v.anonOpen]};
+ return JSON.stringify([v.tab,...(detail[v.tab]||[])]);
 }
-window.addEventListener('hashchange',()=>{sharePending=readShareRoute();if(sharePending&&D){render();scrollTo(0,0);}});
+function syncShareAddress(){
+ if(notionResumeTicket||sharePending||(location.hash==='#intro'&&introDeepPending))return;
+ const r=currentShareRoute(),hash='#'+r.kind+'/'+r.id;
+ const view=navState(),key=browserRouteKey(view),owner=accountMediaEpoch;
+ const current=appHistoryCurrent;
+ const replace=!current||current.owner!==owner||appHistoryReplace||current.key===key;
+ const id=replace&&current&&current.owner===owner?current.id:++appHistoryId;
+ const entry={id,key,owner,view,trail:navHistory.slice(),previous:replace?(current?.previous||null):current.id};
+ if(current&&replace&&(current.key!==key||current.id!==id))entry.view.scroll=0;
+ try {
+  if(!replace||location.hash!==hash||history.state?.dojeId!==id||history.state?.dojeSession!==appHistorySession){
+   history[replace?'replaceState':'pushState']({dojeId:id,dojeSession:appHistorySession,dojeHash:hash},'',hash);
+  }
+  appHistoryEntries.set(id,entry);appHistoryCurrent=entry;appHistoryReplace=false;
+  if(appHistoryEntries.size>100)appHistoryEntries.delete(appHistoryEntries.keys().next().value);
+ }catch{}
+}
+function restoreBrowserRoute(state){
+ if(state?.dojeSession!==appHistorySession||state.dojeHash!==location.hash)return false;
+ const entry=appHistoryEntries.get(state.dojeId);
+ if(!entry||entry.owner!==accountMediaEpoch||!D||!routeAllowed(entry.view.tab))return false;
+ sharePending=null;shareCheck=null;appHistoryCurrent=entry;appHistoryReplace=true;
+ navHistory=entry.trail.slice();restoreNavView(entry.view);
+ return true;
+}
+window.addEventListener('popstate',e=>{if(!D)return;if(!restoreBrowserRoute(e.state)&&readShareRoute()){
+ appHistoryCurrent=null;appHistoryReplace=true;sharePending=readShareRoute();render();scrollTo(0,0);
+}});
+window.addEventListener('hashchange',()=>{const state=history.state;if(state?.dojeSession===appHistorySession&&state.dojeId===appHistoryCurrent?.id&&state.dojeHash===location.hash)return;
+ sharePending=readShareRoute();if(sharePending&&D){appHistoryCurrent=null;appHistoryReplace=true;render();scrollTo(0,0);}
+});
+document.addEventListener('click',()=>{
+ if(appHistoryCurrent&&appHistoryCurrent.owner===accountMediaEpoch)appHistoryCurrent.view.scroll=scrollY;
+},true);
+window.addEventListener('scroll',()=>{
+ if(appHistoryCurrent&&appHistoryCurrent.owner===accountMediaEpoch&&navScroll===null)appHistoryCurrent.view.scroll=scrollY;
+},{passive:true});
 document.addEventListener('click',async e=>{
  const b=e.target.closest?.('[data-copy-link-kind],[data-copy-menu],[data-material-open],[data-material-back]');if(!b||!D)return;
  if(b.hasAttribute('data-material-open')){materialOpen=b.dataset.materialOpen;return render();}
@@ -690,7 +728,7 @@ document.addEventListener('click',async e=>{
 let introDeepPending=location.hash==='#intro';
 function setData(d){ if(d){const moved=(d.notices||[]).filter(noticeReadingInfo);d.contestResources=orderNoticeReading([...new Map([...(d.contestResources||[]),...moved].map(n=>[n.id,n])).values()]);d.notices=(d.notices||[]).filter(n=>!noticeReadingInfo(n));} if(d&&d.homeOnly&&!d.fromCache)saveHome(d); if(!d.homeOnly)fullLoadError=""; $("#startupScreen").hidden=true; if(!D)tab=tab==="school"?"school":"today"; D = d;queueMicrotask(resumePersonalNotion);resourceLinkError=""; TODAY = D.today || TODAY; showUpdated(); render(); if(introDeepPending){introDeepPending=false;queueMicrotask(openIntroEntry);} }
 function showUpdated(){const el=$("#updAt"),u=D&&D.lastUpdate;if(!el)return;if(D&&D.fromCache){el.innerHTML='<span class="update-time">저장된 화면</span> <span class="update-summary">· 최신 자료 받는 중 <b>'+(performance.now()/1000).toFixed(1)+'초</b></span>';el.hidden=false;clearTimeout(showUpdated.t);showUpdated.t=setTimeout(showUpdated,200);return;}if(!u||!u.at){el.textContent="";el.hidden=true;return;}const day=u.at.slice(0,10),hm=u.at.slice(11,16),label="최근 업데이트 "+(day===TODAY?"오늘":Number(day.slice(5,7))+"."+Number(day.slice(8,10)))+(hm?" "+hm:"");el.innerHTML='<span class="update-time">'+esc(label)+'</span>'+(u.what?' <span class="update-summary">· '+esc(u.what)+'</span>':"");el.hidden=false;}
-async function reload(freshSchedule=false){ drvStale(); const epoch=fullLoadEpoch,owner=JSON.stringify(cred||{});try { const data=await call("load", {deferLinks:true,homeOnly:!!(D&&D.homeOnly),freshSchedule:freshSchedule===true});if(epoch!==fullLoadEpoch||owner!==JSON.stringify(cred||{}))return;if(data.homeOnly&&D&&!D.homeOnly)return;setData(data); } catch (e) { if (/PIN|비밀번호|이름|로그인|등록된/.test(e.message)) { logout(e.message); } else toast(e.message); } }
+async function reload(freshSchedule=false){ resetActivityFeed();drvStale(); const epoch=fullLoadEpoch,owner=JSON.stringify(cred||{});try { const data=await call("load", {deferLinks:true,homeOnly:!!(D&&D.homeOnly),freshSchedule:freshSchedule===true});if(epoch!==fullLoadEpoch||owner!==JSON.stringify(cred||{}))return;if(data.homeOnly&&D&&!D.homeOnly)return;setData(data); } catch (e) { if (/PIN|비밀번호|이름|로그인|등록된/.test(e.message)) { logout(e.message); } else toast(e.message); } }
 async function act(action, payload, msg){
   if(isViewer()){toast("보기 전용입니다. 로그인하면 쓸 수 있습니다.");return false;}
   try { const r = await callRaw(action, payload, null, true); if (msg) toast(msg); if (r.load) setData(r.load); else await reload(); return true; }
@@ -787,9 +825,15 @@ function tabsFor(){
 }
 function routeAllowed(k){if(k==='careerNotion'&&(isGuest()||isViewer()))return false;if(isGuest())return GUEST_TABS.includes(k);if(k==='me')return !isViewer();return baseTabs().some(([r])=>r===rootOf(k));}
 let navHistory=[],navCaptured=false,navScroll=null,navAnchor='';
-function navState(){return {tab,materialOpen,projSub,boardOpen,boardFilter,boardQuery,noticeOpen,noticeFilter,noticeQuery,companySub,companySelected,certSelected,certView,schedMode,calSel,calMonth:+calMonth,matQ,matCategory,matSort,anonOpen,anonFilter,learnerTab,scroll:scrollY};}
+function navState(){return {tab,materialOpen,projSub,boardOpen,boardFilter,boardQuery,noticeOpen,noticeFilter,noticeQuery,companySub,companySelected,certSelected,certView,schedMode,calSel,calMonth:+calMonth,matQ,matCategory,matSort,anonOpen,anonFilter,learnerTab,album:photoState.folder,department:careerNotionDepartment,notionStudent:careerNotionSelected,scroll:scrollY};}
 function pushNav(v=navState()){navHistory.push(v);if(navHistory.length>30)navHistory.shift();}
-function backNav(){const v=navHistory.pop();if(!v)return;({tab,materialOpen,projSub,boardOpen,boardFilter,boardQuery,noticeOpen,noticeFilter,noticeQuery,companySub,companySelected,certSelected,certView,schedMode,calSel,matQ,matCategory,matSort,anonOpen,anonFilter,learnerTab}=v);calMonth=new Date(v.calMonth);navScroll=v.scroll;navAnchor='';lsSet('dj.tab',tab);render();}
+function restoreNavView(v){if(!v)return;if(photoState.folder!==v.album){photoState.ticket++;photoState.folder=v.album||"";photoState.loading=false;photoState.data=null;photoState.error="";}if(careerNotionDepartment!==v.department||careerNotionSelected!==v.notionStudent){careerNotionDepartment=v.department;careerNotionSelected=v.notionStudent;careerNotionReset();}({tab,materialOpen,projSub,boardOpen,boardFilter,boardQuery,noticeOpen,noticeFilter,noticeQuery,companySub,companySelected,certSelected,certView,schedMode,calSel,matQ,matCategory,matSort,anonOpen,anonFilter,learnerTab}=v);calMonth=new Date(v.calMonth);navScroll=v.scroll;navAnchor='';lsSet('dj.tab',tab);render();}
+function backNav(){
+ const v=navHistory.pop();if(!v)return;
+ const previous=appHistoryEntries.get(appHistoryCurrent?.previous);
+ if(previous&&previous.owner===accountMediaEpoch&&previous.key===browserRouteKey(v)){history.back();return;}
+ appHistoryReplace=true;restoreNavView(v);
+}
 function selectedRoute(){if(tab==='projects')return projSub||'overview';if(tab==='schedule')return schedMode==='aft'?'after':schedMode==='attendance'?'afterattendance':'schedule';return tab;}
 function hubOptions(){return hubOptionsAll().filter(([k])=>!(isViewer()&&['me','careerNotion'].includes(k)));}
 function hubOptionsAll(){
@@ -1261,6 +1305,7 @@ let accountMediaEpoch=0;
 function mediaOwner(){return accountMediaEpoch+"|"+JSON.stringify(cred||{});}
 function checkMediaOwner(owner){if(owner!==mediaOwner())throw Error("계정이 변경되어 자료 불러오기를 중단했습니다");}
 function resetAccountMedia(){
+ appHistoryEntries.clear();appHistoryCurrent=null;resetActivityFeed();
  accountMediaEpoch++;careerNotionDepartment=true;careerNotionSelected='';notionResumePending=false;careerNotionReset();
  [fileImageObserver,noticeObserver,inlineVideoObserver,photoObserver].forEach(o=>{if(o)o.disconnect();});
  document.querySelectorAll("video").forEach(v=>{v.pause();v.removeAttribute("src");v.load();});
@@ -1333,12 +1378,15 @@ function contestStudyMaterials(){
 }
 function vContestTop(){if(boardOpen){const p=(D.boardPosts||[]).find(p=>p.id===boardOpen);return vBoard()+(isContentSchoolContest(p)?contestStudyMaterials():'');}return vContests()+contestStudyMaterials();}
 function vStudyRoom(){
- const slash=String.fromCharCode(47,47),links=[['디지털논리회로','논리회로 학습실','script.google.com/macros/s/AKfycbyC_P1CNQ9out5BqKgTd3Ad3ONLwp5sM1gBqeAmQIaY8axkOJMw24e0jUeFAlH5fYHf/exec#class'],['외부평가','전자기기생산 L2 외부평가 학습실','electronics-l2-learning.electronics-l2-learning.workers.dev/']];
- const l2Qr='<figure class="study-room-qr"><img width="144" height="144" src="data:image/png;base64,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" alt="전자기기생산 L2 학생용 학습실 접속 QR"><figcaption>휴대폰으로 스캔</figcaption></figure>';
- return extraHead('학습실','필요한 과목을 선택해 학습을 시작하세요.','<button class="btn" data-study-tools data-go="tools">무료 도구</button>')+'<div class="grid2">'+links.map(([name,desc,host])=>{
+ const slash=String.fromCharCode(47,47);
+ const links=[
+  ['디지털논리회로','논리회로 학습실','script.google.com/macros/s/AKfycbyC_P1CNQ9out5BqKgTd3Ad3ONLwp5sM1gBqeAmQIaY8axkOJMw24e0jUeFAlH5fYHf/exec#class','iVBORw0KGgoAAAANSUhEUgAAAQkAAAEJCAYAAACHaNJkAAAAAklEQVR4AewaftIAAAvQSURBVO3BQW4ESZIEQdMA\/\/9lXZ4ds45AIquLPWMi+CtVVf+Pk6qqxUlV1eKkqmpxUlW1OKmqWpxUVS1OqqoWJ1VVi5OqqsVJVdXipKpqcVJVtTipqlqcVFUtTqqqFidVVYuTqqrFSVXV4qSqavGTlwH5K9R8A5A3qbkBZFIzAZnUPAVkUvMmIJOaG0AmNTeATGomIH+FmjedVFUtTqqqFidVVYuTqqrFT\/4Baj4NyFNAJjUTkBtqbgC5AWRSM6l5CshTaiYgT6mZ1ExAJjVPAZnUPKXm04B82klV1eKkqmpxUlW1OKmqWvzkS4A8peYpIN8A5E1AbqiZ1NwAMqm5oWYC8hSQSc0E5C8D8pSabzipqlqcVFUtTqqqFidVVYuf1H8E5E1qJiCTmgnIDTUTkEnNBOQpIDfUvAnIpOZNQCY1\/0tOqqoWJ1VVi5OqqsVJVdXiJ\/UfqbkB5AaQSc1TaiYgN4A8BWRS8w1qbgCp506qqhYnVVWLk6qqxUlV1eInX6LmvxWQSc2nqZmATGqeAnIDyJvU3AByQ803qPm3OamqWpxUVS1OqqoWJ1VVi5\/8A4D8ZWomIJOaG2omIJOaCcikZgIyqXkKyKTmTWomIJOaCcik5oaaCcikZgIyqbkB5L\/BSVXV4qSqanFSVbU4qapa4K\/8DwEyqZmA3FDzFJBJzVNAbqh5CsinqZmAvEnNBGRS87\/upKpqcVJVtTipqlqcVFUt8FdeBGRSMwH5NDVvAvImNROQG2puAPk0NW8C8pSaG0BuqLkB5NPUfMNJVdXipKpqcVJVtTipqlrgr\/xhQCY1bwIyqXkTkBtqbgCZ1NwA8pSaCcik5gaQp9RMQCY1N4DcUPMUkEnNBOQpNW86qapanFRVLU6qqhYnVVUL\/JUXAZnUTEAmNU8BmdT8FUAmNROQSc0E5IaaCcikZgJyQ80EZFLzDUD+CjUTkEnNBGRS82knVVWLk6qqxUlV1eKkqmqBv\/KHAbmh5gaQSc0E5Ck1E5BJzQTkhppPA\/Jvo2YCMqmZgNxQcwPIDTUTkEnNN5xUVS1OqqoWJ1VVi5OqqgX+youA3FAzAZnUTEBuqLkBZFIzAZnU3AAyqbkB5Ck1E5AbaiYgT6l5E5BJzQ0gk5obQCY13wBkUvOmk6qqxUlV1eKkqmpxUlW1+MkfB+SGmgnIDTU31ExAbqh5k5o3qZmATGomIJOaNwG5AWRSM6mZgHwDkBtqvuGkqmpxUlW1OKmqWpxUVS3wV14EZFIzAbmh5gaQSc2bgDyl5ikgN9Q8BeTT1LwJyDeo+TQgN9R82klV1eKkqmpxUlW1OKmqWvzkHwBkUvMUkEnNDSBPqZmATGpuALmhZgIyAZnU3FAzAbmh5gaQSc0EZFLzJjVPAXlKzVNqvuGkqmpxUlW1OKmqWpxUVS1+8jI1N4BMaiYgk5oJyKTmKTUTkEnNX6FmAjKpmYBMaiYgE5BJzaTmhpqn1NwAckPNpOZNQCY1E5BJzaedVFUtTqqqFidVVYuTqqrFT14G5BvUPKXmKSBvUjMBmdT8twJyQ81TaiYgE5AbaiYgTwGZ1ExAJjVvOqmqWpxUVS1OqqoWJ1VVi5\/8A9TcADKpmYDcUPNpaiYgk5oJyATkBpAbam6omYC8CcikZlLzJiCTmhtqJiATkEnNBOQpIJOaTzupqlqcVFUtTqqqFidVVYuf\/AOATGrepGYCMqmZgExqbgCZ1NxQMwG5oWYCcgPIpOYpNTfUTEAmNROQSc1TQN6kZgIyqbkB5K84qapanFRVLU6qqhYnVVUL\/JUPA3JDzQTkG9TcAPImNTeA\/DdQMwF5Ss0EZFJzA8g3qPkrTqqqFidVVYuTqqrFSVXV4idfouYpNU8BeZOaG0CeAjKpmYDcUPMUkBtq\/m2A3FDzFJAbQJ5S86aTqqrFSVXV4qSqanFSVbX4yT9AzacBmdTcUHMDyKTm09RMQN4EZFJzQ80E5IaaSc0EZFIzAZnUTEDeBGRSc0PNBOSGmk87qapanFRVLU6qqhYnVVWLn7wMyKTm09T826iZgDylZgJyQ81TQCY1E5AJyJvUTEAmNTeA3FDzFJCngExq3nRSVbU4qapanFRVLU6qqhb4Kx8GZFIzAfkGNTeAPKVmAjKpuQFkUjMB+QY1TwF5Ss0NIH+ZmgnIDTVvOqmqWpxUVS1OqqoWJ1VVC\/yVFwGZ1ExAJjUTkEnNDSCTmgnIU2omIDfU3ADyl6l5CsinqXkKyA01TwGZ1NwAMql500lV1eKkqmpxUlW1OKmqWvzkZWo+DcgNNROQSc1TQL5BzQ0gN9S8Ccik5oaaCcgNNTeATGomNROQp4A8BWRS82knVVWLk6qqxUlV1eKkqmrxk38AkBtAJjUTkEnNDTU3gNxQ8yYgk5oJyKTmhpobQJ5SMwG5AWRSMwG5AWRSMwG5oebTgExqJiCTmjedVFUtTqqqFidVVYuTqqrFT14G5IaaCcgE5AaQN6mZgExAJjUTkBtqJiCTmgnIpOZNaiYgN9TcAPJpQCY1E5AbQCY1T6mZgExqPu2kqmpxUlW1OKmqWpxUVS1+8i+k5gaQG2qeUjMBmdRMQN6kZgJyQ82kZgLyFJBJzQ0gN4BMav4KNTeA3AAyqXnTSVXV4qSqanFSVbU4qapa4K+8CMgNNROQG2omIJOaCchTam4AeZOaCcgNNROQG2puAHmTmk8DMql5E5BJzQRkUvNXnFRVLU6qqhYnVVWLk6qqxU\/+ODU31ExAnlLzaWqeUjMBmYBMaiYgE5AbaiYgk5obQN6k5gaQSc0NIG8CMqmZgExq3nRSVbU4qapanFRVLU6qqhb4Kx8G5Iaap4BMam4AmdRMQG6ouQFkUnMDyA01bwJyQ81TQCY1E5BJzZuATGomIJOap4BMar7hpKpqcVJVtTipqlqcVFUtfvIyIJOaCcgEZFIzAZnUTEAmNU+puQFkUjOpeUrNDSA31ExAJjXfAOQpIJOaCcikZgLyv+SkqmpxUlW1OKmqWpxUVS3wV\/4wIJOaCcgNNX8ZkEnNU0BuqHkKyA01E5BJzVNAJjUTkEnNBOSGmgnIDTUTkBtqPu2kqmpxUlW1OKmqWpxUVS3wVz4MyJvU3AByQ80E5K9QcwPIDTUTkKfUfBqQG2qeAnJDzQTkr1DzppOqqsVJVdXipKpqcVJVtfjJy4BMam4AeQrIpGYCMgG5oWYCckPNDSCfBuRNQG6ouQFkUjMBeZOaCcgE5E1q\/rKTqqrFSVXV4qSqanFSVbXAX\/kfAmRSMwGZ1ExA\/go1E5BJzVNAbqiZgLxJzQRkUnMDyA01TwF5Ss0EZFLzppOqqsVJVdXipKpqcVJVtfjJy4D8FWomNZ+mZgJyQ80E5AaQp4BMam6omYBMaiYgk5oJyARkUjMB+TQgk5obaiYgE5BJzaedVFUtTqqqFidVVYuTqqrFT\/4Baj4NyA0gk5pJzTcAmdTcAPKUmqeA3ADyJjUTkBtqJiBPqXkKyA01E5BJzZtOqqoWJ1VVi5OqqsVJVdXiJ18C5Ck1bwJyQ81Tam4AuQFkUjMBmYC8Sc0EZFJzA8gNIJOaCcgE5Ckgn6bmhppPO6mqWpxUVS1OqqoWJ1VVi5\/UNSCTmgnIpObTgDyl5gaQCcik5gaQT1PzFJAbaiYgk5obQJ5S86aTqqrFSVXV4qSqanFSVbX4SUXNm9Q8pWYCMqm5AeRNam4AmdTcUPMmIJ8GZFJzA8ikZgIyqfm0k6qqxUlV1eKkqmpxUlW1+MmXqPkGNW8C8pSaCcikZgIyqbmhZgJyQ80EZFLzFJAbat6k5gaQSc0NIJOaCcik5htOqqoWJ1VVi5OqqsVJVdUCf+VFQP4KNROQG2qeAvJpaiYgk5obQCY1E5BJzZuAPKXmKSBvUjMBmdTcADKp+bSTqqrFSVXV4qSqanFSVbXAX6mq+n+cVFUtTqqqFidVVYuTqqrFSVXV4qSqanFSVbU4qapanFRVLU6qqhYnVVWLk6qqxUlV1eKkqmpxUlW1OKmqWpxUVS1OqqoWJ1VVi\/8Djx3DF60WLoMAAAAASUVORK5CYII='],
+  ['외부평가','전자기기생산 L2 외부평가 학습실','electronics-l2-learning.electronics-l2-learning.workers.dev/','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']
+ ];
+ return extraHead('학습실','필요한 과목을 선택해 학습을 시작하세요.','<button class="btn" data-study-tools data-go="tools">무료 도구</button>')+'<div class="grid2">'+links.map(([name,desc,host,qr])=>{
   const open='<a class="btn pri" href="https:'+slash+host+'" target="_blank" rel="noopener noreferrer">'+name+' 학습실 열기 <span class="ev-s">(새 창)</span></a>';
-  const access=name==='외부평가'?'<div class="study-room-access">'+open+l2Qr+'</div>':open;
-  return '<section class="panel pad"><h2>'+name+'</h2><p>'+desc+'</p>'+access+'</section>';
+  const scan='<figure class="study-room-qr"><img width="144" height="144" src="data:image/png;base64,'+qr+'" alt="'+name+' 학습실 접속 QR"><figcaption>휴대폰으로 스캔</figcaption></figure>';
+  return '<section class="panel pad"><h2>'+name+'</h2><p>'+desc+'</p><div class="study-room-access">'+open+scan+'</div></section>';
  }).join('')+'</div>';
 }
 /* 자격증: 종목별 일정·자료실·준비 게시글 */
@@ -1472,21 +1520,93 @@ function todayTodo(){
     ${todos.length?`<ul class="todo-list">${open.map(row).join("")}${done.map(row).join("")}</ul>`:'<p class="ev-s">나만 보는 할 일 목록입니다. 다른 기기에서 로그인해도 그대로 보입니다.</p>'}
     <details class="todo-memo"${h.memo?" open":""}><summary>메모</summary><textarea id="todoMemo" maxlength="2000" rows="3" placeholder="나만 보는 메모">${esc(h.memo||"")}</textarea><div class="row"><span class="spacer"></span><button class="btn sm" type="button" data-memo-save>메모 저장</button></div></details></section>`;
 }
+
+let activityFeed={items:[],pending:false,done:false,error:false};
+let activityFeedObserver=null;
+function resetActivityFeed(){
+ activityFeed={items:[],pending:false,done:false,error:false};
+ if(activityFeedObserver)activityFeedObserver.disconnect();
+}
+function activityFeedRow(v){
+ const kinds=[v.youtube?"YouTube":"",v.attached?"첨부 동영상":""].filter(Boolean).join(" · ");
+ const meta=[v.subject,v.date?fmtMD(v.date):"",kinds].filter(Boolean).join(" · ");
+ const id=esc(v.id);
+ return '<article class="activity-feed-post"><div class="ev-s">'+esc(meta)+'</div><h3>'+esc(v.title)+'</h3>'
+  +'<div class="row"><button type="button" class="btn sm pri" data-feed-play="'+id+'">영상 재생</button>'
+  +'<button type="button" class="btn sm ghost" data-home-video="'+id+'">게시글 보기</button></div><div data-feed-player></div></article>';
+}
 function todayActivityVideos(){
  if(isGuest()||isViewer()||D.loginDisabled)return "";
- const videos=D.homeOnly?(D.activityVideos||[]):(D.boardPosts||[]).filter(p=>p.category==="프로젝트"&&hasActivityVideo(p)).sort(activityVideoNewest).slice(0,3).map(p=>({id:p.id,title:p.title,subject:p.subject,date:p.date||String(p.at||"").slice(0,10),youtube:youtubeIds(p.body,p.link).length>0,attached:(p.files||[]).some(isVideoFile)}));
- if(!videos.length)return "";
- const rows=videos.map(v=>{
-  const kinds=[v.youtube?"YouTube":"",v.attached?"첨부 동영상":""].filter(Boolean).join(" · ");
-  const meta=[v.subject,v.date?fmtMD(v.date):"",kinds].filter(Boolean).join(" · ");
-  return `<button type="button" class="listbtn" data-home-video="${esc(v.id)}"><div><h3>${esc(v.title)}</h3><div class="ev-s">${esc(meta)}</div></div><span aria-hidden="true">▶</span></button>`;
- }).join("");
- return `<section class="panel home-activity-videos" aria-label="활동 영상"><div class="row pad"><span class="label">활동 영상</span><span class="spacer"></span><button class="btn sm ghost" data-home-videos>영상 전체 보기</button></div>${rows}</section>`;
+ const recent=D.homeOnly?(D.activityVideos||[]):(D.boardPosts||[]).filter(p=>p.category==="프로젝트"&&hasActivityVideo(p))
+  .sort(activityVideoNewest).slice(0,3).map(p=>({id:p.id,title:p.title,subject:p.subject,date:p.date||String(p.at||"").slice(0,10),youtube:youtubeIds(p.body,p.link).length>0,attached:(p.files||[]).some(isVideoFile)}));
+ if(!recent.length)return "";
+ const seen=new Set(recent.map(v=>v.id)),videos=recent.concat(activityFeed.items.filter(v=>!seen.has(v.id)));
+ return '<section class="panel home-activity-videos" aria-label="활동 영상"><div class="row pad"><h2 class="label">활동 영상</h2><span class="spacer"></span><button class="btn sm ghost" data-home-videos>영상 전체 보기</button></div>'
+  +'<div data-feed-items>'+videos.map(activityFeedRow).join('')+'</div>'
+  +'<div data-feed-end>'+activityFeedEnd(recent.length)+'</div></section>';
+}
+function activityFeedEnd(firstCount){
+ if(activityFeed.done||firstCount<3)return "";
+ if(activityFeed.pending)return '<p class="pad ev-s" role="status">지난 영상을 불러오는 중…</p>';
+ return '<button type="button" class="btn sm activity-feed-more" data-feed-more>'+ (activityFeed.error?'다시 불러오기':'지난 영상 더 보기')+'</button>';
+}
+function hydrateActivityFeed(){
+ if(activityFeedObserver)activityFeedObserver.disconnect();
+ const more=$('[data-feed-more]');
+ if(!more||activityFeed.error||typeof IntersectionObserver!=='function')return;
+ activityFeedObserver=new IntersectionObserver(entries=>{
+  if(entries.some(entry=>entry.isIntersecting)&&scrollY>0)loadActivityFeed();
+ },{rootMargin:'240px'});
+ activityFeedObserver.observe(more);
+}
+window.addEventListener('scroll',()=>{
+ const more=$('[data-feed-more]');
+ if(more&&!activityFeed.error&&scrollY>0&&more.getBoundingClientRect().top<innerHeight+240)loadActivityFeed();
+},{passive:true});
+async function loadActivityFeed(){
+ const state=activityFeed,items=$('[data-feed-items]'),end=$('[data-feed-end]');
+ if(!items||!end||state.pending||state.done)return;
+ const after=items.lastElementChild?.querySelector('[data-home-video]')?.dataset.homeVideo;
+ if(!after)return;
+ state.pending=true;state.error=false;end.innerHTML=activityFeedEnd(3);
+ try{
+  const page=await call('activityVideoPage',{after});
+  if(state!==activityFeed)return;
+  const known=new Set([...items.querySelectorAll('[data-home-video]')].map(b=>b.dataset.homeVideo).concat(state.items.map(v=>v.id)));
+  const next=page.items.filter(v=>!known.has(v.id));
+  state.items.push(...next);state.done=!page.more||!next.length;
+  const current=$('[data-feed-items]');
+  if(current){
+   const visible=new Set([...current.querySelectorAll('[data-home-video]')].map(b=>b.dataset.homeVideo));
+   current.insertAdjacentHTML('beforeend',next.filter(v=>!visible.has(v.id)).map(activityFeedRow).join(''));
+  }
+ }catch{if(state===activityFeed)state.error=true;}
+ finally{
+  if(state===activityFeed){
+   state.pending=false;
+   const current=$('[data-feed-end]');
+   if(current){current.innerHTML=activityFeedEnd(3);hydrateActivityFeed();}
+  }
+ }
+}
+async function playActivityFeed(button){
+ const player=button.closest('article').querySelector('[data-feed-player]'),owner=mediaOwner();
+ button.disabled=true;player.textContent='영상을 준비하는 중…';
+ try{
+  const data=await call('activityVideoPage',{id:button.dataset.feedPlay});
+  if(!player.isConnected||owner!==mediaOwner())return;
+  player.innerHTML=youtubeEmbedsHtml(...data.youtube)+videoCardsHtml(data.files,'board');
+  if(!player.firstChild)player.textContent='재생할 영상이 없습니다.';
+  hydrateInlineVideos();button.hidden=true;
+ }catch(e){if(player.isConnected&&owner===mediaOwner())player.textContent=e.message;}
+ finally{button.disabled=false;}
 }
 $("#main").addEventListener("click",e=>{
- const b=e.target.closest("[data-home-video],[data-home-videos]");
- if(!b)return;
- boardFilter="활동 영상";boardQuery="";boardOpen=b.dataset.homeVideo||null;projSub="board";
+ const btn=e.target.closest("[data-feed-more],[data-feed-play],[data-home-video],[data-home-videos]");
+ if(!btn)return;
+ if(btn.hasAttribute('data-feed-more'))return loadActivityFeed();
+ if(btn.dataset.feedPlay)return playActivityFeed(btn);
+ boardFilter="활동 영상";boardQuery="";boardOpen=btn.dataset.homeVideo||null;projSub="board";
  go("projects");
 });
 function vToday(){
@@ -1506,7 +1626,7 @@ function vToday(){
     contests:()=>todayContests(),
     details:()=>(D.homeOnly&&!isGuest())?'<section class="panel pad"><button class="btn" data-home-details>'+ (fullLoadPending?'활동 자료 확인 중…':'내 할 일·요청 결과·팀 소식 보기')+'</button><p class="ev-s">명단·출결·BOM 등은 메뉴를 열 때 불러옵니다.</p></section>':""
   };
-  todayOrder().forEach(k=>{h+=cards[k]();if(k==="events")h+=todayActivityVideos();});
+  todayOrder().forEach(k=>{h+=cards[k]();});
   if (D.tabsMissing && D.tabsMissing.length && T()) h += `<div class="banner">시트에서 ‘${esc(D.tabsMissing.join("’, ‘"))}’ 탭을 찾지 못했습니다. Code.gs 위쪽의 탭 이름을 확인하세요.</div>`;
   if (T()&&!D.homeOnly){
     const rq = D.requests.filter(r => r.unreadTeacher).length, nopin = D.roster.filter(r => !r.pin).length;
@@ -1523,7 +1643,7 @@ function vToday(){
     if (un) h += `<div class="banner row"><span>확인하지 않은 공지 ${un}건</span><span class="spacer"></span><button class="btn sm" data-go="notices">공지 보기</button></div>`;
 
   }
-  return h;
+  return h+todayActivityVideos();
 }
 
 /* 전달 자료를 공지 한 곳에서 관리하고 관련 프로젝트·자격증·대회에서 다시 찾습니다. */
@@ -2446,8 +2566,8 @@ let photoObserver=null,photoActive=0;const photoQueue=[];
 function vPhotos(){return extraHead("사진첩","대회·행사별 앨범에 사진·영상을 함께 모읍니다. 로그인한 학생과 교사는 올릴 수 있습니다.",T()?'<button class="btn" data-photo-setup>Drive 폴더 연결</button>':"")+'<section class="panel pad" id="photoGallery" aria-live="polite"><p class="ev-s">사진첩을 불러오는 중…</p></section>';}
 function hydratePhotos(){if(tab!=="photos")return;const actor=JSON.stringify(cred||{});if(photoActor!==actor){photoActor=actor;photoState.ticket++;photoState.loading=false;photoState.data=null;photoCache.clear();}if(photoState.data)paintPhotos();else if(!photoState.loading)loadPhotos(photoState.folder);}
 async function loadPhotos(folder){
- const st=photoState,ticket=++st.ticket;photoMediaFilter="all";photoByFilter="all";photoQuery="";st.folder=folder||"";st.loading=true;st.error="";st.limit=60;
- try{const data=await call("photoBrowse",{folder:st.folder});if(ticket!==st.ticket)return;st.data=data;st.folder=data.folder||"";syncShareAddress();}
+ const st=photoState,ticket=++st.ticket;const wasFolder=st.folder;photoMediaFilter="all";photoByFilter="all";photoQuery="";st.folder=folder||"";st.loading=true;st.error="";st.limit=60;
+ try{const data=await call("photoBrowse",{folder:st.folder});if(ticket!==st.ticket)return;st.data=data;st.folder=data.folder||"";if(tab==="photos"){if(!wasFolder&&!folder)appHistoryReplace=true;syncShareAddress();}}
  catch(e){if(ticket!==st.ticket)return;st.error=e.message;st.data=null;}finally{if(ticket===st.ticket){st.loading=false;paintPhotos();}}
 }
 function photoThumb(attrs,label){return '<span class="photo-picture"><img '+attrs+' alt="'+esc(label)+'" hidden><span class="photo-status ev-s">사진</span></span>';}
@@ -2739,13 +2859,13 @@ function render(){
   $("#profileTop").hidden=isGuest()||isViewer();$("#profileTop").textContent=T()?"설정":"내 정보";$("#logoutTop").hidden = Boolean(D.loginDisabled); $("#logoutTop").textContent = (isGuest()||isViewer()) ? "로그인" : "나가기";
   evStore.clear();
   const draft = $("#replyText") ? $("#replyText").value : null, anonDraft = $("#anonText") ? $("#anonText").value : null;
-  if(D.homeOnly&&!["today","school","equipment","tools","study"].includes(tab)&&!(tab==='projects'&&projSub==='overview')){ $("#main").innerHTML=navigationBar()+fullLoadNotice();if(!fullLoadError)hydrateFullData();return;}
+  if(D.homeOnly&&!["today","school","equipment","tools","study"].includes(tab)&&!(tab==='projects'&&projSub==='overview')){ $("#main").innerHTML=navigationBar()+fullLoadNotice();syncShareAddress();if(!fullLoadError)hydrateFullData();return;}
   $("#main").innerHTML = navigationBar()+({today:vToday, notices:vNotices, schedule:vSchedule, requests:vRequests, anon:vAnon, training:vTraining, journal:vTrainingJournal, purchases:()=>vPurchases()+noticeCategorySection("준비물·구매"), ojtcalendar:vOjtCalendar, roster:vRosterSub, register:vRegisterSub, attendance:vAttendance, units:vUnits, portfolio:vCareerPortfolio,intro:vCareerPortfolio,study:vStudyRoom,tools:vEducationTools, board:vProjectHub, projects:vProjectHub, materials:vMaterialsSub, photos:vPhotos, equipment:vEquipment, contest:vContestTop, cert:vCertTop, company:vCompany,careerNotion:vCareerNotion, school:vSchool, me:vMe}[tab] || vToday)();
 
   if (D.loginDisabled) $("#main").insertAdjacentHTML("afterbegin", `<div class="banner" role="status">${D.localTest ? "PC 테스트 · 입력한 자료는 이 컴퓨터에만 저장됩니다. 실제 구글시트에는 반영되지 않습니다." : "로그인 없는 테스트 모드 · 주소를 아는 사람은 학생 기록 조회와 작성·관리를 할 수 있습니다."}</div>`);
   if(isGuest())document.querySelectorAll('[data-board-new],[data-cert-new],[data-contest-new],[data-cert-post-new],#boardCommentForm').forEach(e=>e.remove());
   syncShareAddress();viewerStrip();bindBoardComment();finishNav();
-  hydrateCareerNotion();hydrateDrives(); hydrateNoticeImages();hydrateFileImages();hydrateInlineVideos();hydrateNoticeEmbeds();hydrateResourceLinks();hydratePhotos();hydratePurchaseLinks();hydrateEquipment();
+  hydrateActivityFeed();hydrateCareerNotion();hydrateDrives(); hydrateNoticeImages();hydrateFileImages();hydrateInlineVideos();hydrateNoticeEmbeds();hydrateResourceLinks();hydratePhotos();hydratePurchaseLinks();hydrateEquipment();
   if (draft !== null && $("#replyText")) $("#replyText").value = draft;
   if (anonDraft !== null && $("#anonText")) $("#anonText").value = anonDraft;
   if (armed){ const b = [...document.querySelectorAll("[data-del],[data-delpe],[data-extra-delete],[data-anon-del],[data-file-del],[data-co-del]")].find(x => (x.dataset.del || x.dataset.extraDelete || x.dataset.anonDel || x.dataset.fileDel || (x.dataset.coDel ? "co|" + x.dataset.coDel : "") || "pe|" + x.dataset.delpe) === armed); if (b){ b.classList.add("armed"); b.textContent = "삭제 확인"; } }
