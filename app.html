@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="e84354c">
+<meta name="dj-build" content="d2d45b5">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -425,6 +425,7 @@ main{max-width:960px;margin:auto;padding:20px 16px;box-sizing:border-box}.startu
 
 
 
+.home-activity-videos{border-color:#ead0b6;border-top:4px solid #ac591f}.home-activity-videos .label{color:#854114;font-weight:700}
 .home-notices{border-color:#d4c6ef;border-top:4px solid #7652a7}.home-notices>.row .label,.home-notices>.pad .label{color:#694394;font-weight:700}
 .home-events{border-color:#b9d4ef;border-top:4px solid #286aa7}.home-events>.pad .label{color:#205c93;font-weight:700}
 .home-meal{border-color:#b7dccc;border-top:4px solid #287d59}.home-meal>.pad .label{color:#206747;font-weight:700}
@@ -1246,7 +1247,13 @@ $('#main').addEventListener('click',e=>{const b=e.target.closest('button');if(!b
 
 /* 프로젝트 게시판: 프로젝트·자격증 내용과 자료 공유 */
 let projSub=null,boardOpen=null,boardFilter='프로젝트',boardQuery='',boardDraftFiles=[];
-function boardList(){const q=boardQuery.trim().toLowerCase();return [...(D.boardPosts||[])].filter(p=>(p.category===boardFilter)&&[p.title,p.subject,p.body].join(' ').toLowerCase().includes(q)).sort((a,b)=>String(b.updated).localeCompare(String(a.updated)));}
+function boardList(category=boardFilter){
+ const q=boardQuery.trim().toLowerCase(),videos=category==='활동 영상';
+ const posts=(D.boardPosts||[]).filter(p=>(videos?p.category==='프로젝트'&&hasActivityVideo(p):p.category===category)&&[p.title,p.subject,p.body].join(' ').toLowerCase().includes(q));
+ return posts.sort(videos?activityVideoNewest:(a,b)=>String(b.updated).localeCompare(String(a.updated)));
+}
+function activityVideoNewest(a,b){return String(b.date||b.at).localeCompare(String(a.date||a.at))||String(b.at).localeCompare(String(a.at));}
+function hasActivityVideo(p){return (p.files||[]).some(isVideoFile)||youtubeIds(p.body,p.link).length>0;}
 const isImageFile = f => /^image\/(png|jpeg|gif|webp)$/.test(String(f.mime||"")) || /\.(png|jpe?g|gif|webp)$/i.test(String(f.name||""));
 /* 첨부 사진은 글 안에서 바로 보이게(누르면 크게 보기). 원본 받기 줄은 그대로 */
 function fileGalleryHtml(files){const imgs=(files||[]).filter(isImageFile);return imgs.length?'<div class="notice-gallery">'+imgs.map(f=>'<button type="button" class="notice-photo" data-document-preview="file|'+esc(f.id)+'" aria-label="'+esc(f.name)+' 크게 보기"><img data-file-img="'+esc(f.id)+'" alt="'+esc(f.name)+'" hidden><span class="ev-s" data-file-img-status>사진 불러오는 중…</span></button>').join('')+'</div>':'';}
@@ -1416,7 +1423,7 @@ function vBoard(lock){
  if(boardOpen){const p=posts.find(p=>p.id===boardOpen);if(!p){boardOpen=null;return vBoard();}const cs=comments.filter(c=>c.post===p.id).sort((a,b)=>String(a.at).localeCompare(String(b.at)));
  return '<div class="sec-h"><button class="btn ghost" data-board-back>‹ 목록으로</button>'+shareButton('board',p.id)+(p.category==='대회'?'<button class="btn sm" data-go="photos">대회 사진첩 보기</button>':'')+(T()||p.mine?'<div class="row"><button class="btn" data-board-edit="'+esc(p.id)+'">수정</button><button class="btn ghost danger" data-board-delete="'+esc(p.id)+'">삭제</button></div>':'')+'</div><section class="panel pad"><div class="row"><span class="chip">'+esc(p.category)+'</span><span class="chip">'+esc(p.status)+'</span><span class="meta">전체 공유</span></div><h2>'+esc(p.title)+'</h2><p class="ev-s">'+esc(p.subject||'')+(p.date?' · 관련일 '+esc(fmtMD(p.date)):'')+' · '+esc(p.author)+' · '+esc(p.updated)+'</p>'+contestBoardDetails(p)+(p.category==='대회'?relatedNotices('contest:'+p.id,p.subject||p.title):'')+'<div class="body board-body">'+esc(p.body)+'</div>'+youtubeEmbedsHtml(p.body,p.link||'')+'<div class="row" style="margin-top:12px">'+extraLink(p.link)+'</div>'+(p.files.length?'<h3>공유 자료</h3>'+boardFilesHtml(p.files):'')+'</section><section class="panel"><div class="pad"><h3>댓글 · '+cs.length+'</h3></div>'+cs.map(c=>'<div class="msg"><b>'+esc(c.author)+'</b> <span class="ev-s">'+esc(c.at)+'</span><p>'+esc(c.body)+'</p>'+(T()||c.mine?'<button class="btn sm ghost danger" data-board-comment-delete="'+esc(c.id)+'">댓글 삭제</button>':'')+'</div>').join('')+'<form id="boardCommentForm" class="pad"><label class="fld"><span>질문·의견</span><textarea id="boardCommentText" required maxlength="1500"></textarea></label><button class="btn pri" type="submit">댓글 달기</button></form></section>';
  }
- const prevFilter=boardFilter;boardFilter=lock||'프로젝트';const list=boardList();boardFilter=prevFilter;return (lock?extraHead('자격증','자격증 시험 일정, 준비 자료, 합격 후기를 함께 나눕니다. 시험일을 넣으면 달력에도 표시됩니다.','<button class="btn pri" data-cert-new>+ 자격증 글쓰기</button>'):extraHead('결과물 공유','프로젝트 결과물과 제작 자료를 전체 학생에게 공유합니다. 대회와 자격증은 해당 메뉴에서 확인하세요.','<button class="btn pri" data-board-new>+ 글쓰기</button>'))+'<section class="panel pad">'+(lock?'':'<div class="row" aria-label="게시판 구분">'+[['프로젝트','프로젝트 결과물']].map(([k,l])=>'<button class="chipbtn" data-board-filter="'+k+'" aria-pressed="'+(boardFilter===k)+'">'+l+'</button>').join('')+'</div>')+'<label class="fld" style="margin-top:12px"><span>검색</span><input type="search" id="boardQuery" value="'+esc(boardQuery)+'" placeholder="제목·프로젝트명·자격증명·대회명·내용 검색"></label><p class="ev-s">이 게시판의 새 글과 첨부는 전체 학생에게 공유됩니다. 개인 활동 기록은 포트폴리오에 남겨 주세요.</p></section><section class="panel">'+(list.length?list.map(p=>'<button class="listbtn" data-board-open="'+esc(p.id)+'"><div><div class="row"><span class="chip">'+esc(p.category)+'</span><span class="chip">'+esc(p.status)+'</span></div><h3>'+esc(p.title)+'</h3><div class="ev-s">'+esc(p.subject||'')+(p.date?' · '+esc(fmtMD(p.date)):'')+'</div><p>'+esc(p.body.slice(0,100))+(p.body.length>100?'…':'')+'</p><div class="ev-s">'+esc(p.author)+' · '+esc(p.updated)+' · 첨부 '+p.files.length+'개 · 댓글 '+comments.filter(c=>c.post===p.id).length+'</div></div></button>').join(''):emptyBox(posts.length?'검색 결과가 없습니다':'아직 공유한 글이 없습니다','글쓰기로 프로젝트·자격증·대회 정보를 올려 주세요.'))+'</section>';
+ const list=boardList(lock||(boardFilter==='활동 영상'&&!isGuest()&&!isViewer()?'활동 영상':'프로젝트'));return (lock?extraHead('자격증','자격증 시험 일정, 준비 자료, 합격 후기를 함께 나눕니다. 시험일을 넣으면 달력에도 표시됩니다.','<button class="btn pri" data-cert-new>+ 자격증 글쓰기</button>'):extraHead('결과물 공유','프로젝트 결과물과 제작 자료를 전체 학생에게 공유합니다. 대회와 자격증은 해당 메뉴에서 확인하세요.','<button class="btn pri" data-board-new>+ 글쓰기</button>'))+'<section class="panel pad">'+(lock?'':'<div class="row" aria-label="게시판 구분">'+([['프로젝트','프로젝트 결과물']].concat(isGuest()||isViewer()?[]:[['활동 영상','활동 영상']])).map(([k,l])=>'<button class="chipbtn" data-board-filter="'+k+'" aria-pressed="'+(boardFilter===k)+'">'+l+'</button>').join('')+'</div>')+'<label class="fld" style="margin-top:12px"><span>검색</span><input type="search" id="boardQuery" value="'+esc(boardQuery)+'" placeholder="제목·프로젝트명·자격증명·대회명·내용 검색"></label><p class="ev-s">이 게시판의 새 글과 첨부는 전체 학생에게 공유됩니다. 개인 활동 기록은 포트폴리오에 남겨 주세요.</p></section><section class="panel">'+(list.length?list.map(p=>'<button class="listbtn" data-board-open="'+esc(p.id)+'"><div><div class="row"><span class="chip">'+esc(p.category)+'</span><span class="chip">'+esc(p.status)+'</span></div><h3>'+esc(p.title)+'</h3><div class="ev-s">'+esc(p.subject||'')+(p.date?' · '+esc(fmtMD(p.date)):'')+'</div><p>'+esc(p.body.slice(0,100))+(p.body.length>100?'…':'')+'</p><div class="ev-s">'+esc(p.author)+' · '+esc(p.updated)+' · 첨부 '+p.files.length+'개 · 댓글 '+comments.filter(c=>c.post===p.id).length+'</div></div></button>').join(''):emptyBox(posts.length?'검색 결과가 없습니다':'아직 공유한 글이 없습니다','글쓰기로 프로젝트·자격증·대회 정보를 올려 주세요.'))+'</section>';
 }
 function boardDlg(p={}){
  p={...p,category:p.category||(tab==='cert'?'자격증':tab==='contest'?'대회':'프로젝트')};
@@ -1465,6 +1472,23 @@ function todayTodo(){
     ${todos.length?`<ul class="todo-list">${open.map(row).join("")}${done.map(row).join("")}</ul>`:'<p class="ev-s">나만 보는 할 일 목록입니다. 다른 기기에서 로그인해도 그대로 보입니다.</p>'}
     <details class="todo-memo"${h.memo?" open":""}><summary>메모</summary><textarea id="todoMemo" maxlength="2000" rows="3" placeholder="나만 보는 메모">${esc(h.memo||"")}</textarea><div class="row"><span class="spacer"></span><button class="btn sm" type="button" data-memo-save>메모 저장</button></div></details></section>`;
 }
+function todayActivityVideos(){
+ if(isGuest()||isViewer()||D.loginDisabled)return "";
+ const videos=D.homeOnly?(D.activityVideos||[]):(D.boardPosts||[]).filter(p=>p.category==="프로젝트"&&hasActivityVideo(p)).sort(activityVideoNewest).slice(0,3).map(p=>({id:p.id,title:p.title,subject:p.subject,date:p.date||String(p.at||"").slice(0,10),youtube:youtubeIds(p.body,p.link).length>0,attached:(p.files||[]).some(isVideoFile)}));
+ if(!videos.length)return "";
+ const rows=videos.map(v=>{
+  const kinds=[v.youtube?"YouTube":"",v.attached?"첨부 동영상":""].filter(Boolean).join(" · ");
+  const meta=[v.subject,v.date?fmtMD(v.date):"",kinds].filter(Boolean).join(" · ");
+  return `<button type="button" class="listbtn" data-home-video="${esc(v.id)}"><div><h3>${esc(v.title)}</h3><div class="ev-s">${esc(meta)}</div></div><span aria-hidden="true">▶</span></button>`;
+ }).join("");
+ return `<section class="panel home-activity-videos" aria-label="활동 영상"><div class="row pad"><span class="label">활동 영상</span><span class="spacer"></span><button class="btn sm ghost" data-home-videos>영상 전체 보기</button></div>${rows}</section>`;
+}
+$("#main").addEventListener("click",e=>{
+ const b=e.target.closest("[data-home-video],[data-home-videos]");
+ if(!b)return;
+ boardFilter="활동 영상";boardQuery="";boardOpen=b.dataset.homeVideo||null;projSub="board";
+ go("projects");
+});
 function vToday(){
   const visibleEvents=allEvents().filter(e=>!isScheduleTrainingTime(e));
   const todays = sortEv(visibleEvents.filter(e => e.date <= TODAY && (e.endDate || e.date) >= TODAY));
@@ -1482,7 +1506,7 @@ function vToday(){
     contests:()=>todayContests(),
     details:()=>(D.homeOnly&&!isGuest())?'<section class="panel pad"><button class="btn" data-home-details>'+ (fullLoadPending?'활동 자료 확인 중…':'내 할 일·요청 결과·팀 소식 보기')+'</button><p class="ev-s">명단·출결·BOM 등은 메뉴를 열 때 불러옵니다.</p></section>':""
   };
-  todayOrder().forEach(k=>{h+=cards[k]();});
+  todayOrder().forEach(k=>{h+=cards[k]();if(k==="events")h+=todayActivityVideos();});
   if (D.tabsMissing && D.tabsMissing.length && T()) h += `<div class="banner">시트에서 ‘${esc(D.tabsMissing.join("’, ‘"))}’ 탭을 찾지 못했습니다. Code.gs 위쪽의 탭 이름을 확인하세요.</div>`;
   if (T()&&!D.homeOnly){
     const rq = D.requests.filter(r => r.unreadTeacher).length, nopin = D.roster.filter(r => !r.pin).length;
