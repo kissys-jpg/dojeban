@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<meta name="dj-build" content="f13b95e">
+<meta name="dj-build" content="bd9e7b8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>도제반 알림판</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -750,22 +750,25 @@ async function studentResetDlg(){
   if(!choices.length){toast('초기화할 수 있는 학생 계정이 없습니다');return;}
   const rows=choices.map(c=>[c.account,c.name+' · '+c.position]);
   const body=sel('초기화할 학생','account',[['','학생 한 명을 선택하세요'],...rows],'')
-   +'<p class="ev-s">선택한 학생의 기존 로그인은 종료됩니다. 새 비밀번호는 이 창에서 한 번만 표시됩니다.</p>'
+   +field('새 비밀번호 (5~64자)','password','','password','required minlength="5" maxlength="64" autocomplete="new-password"')
+   +field('새 비밀번호 확인','confirmPassword','','password','required minlength="5" maxlength="64" autocomplete="new-password"')
+   +'<p class="ev-s">선택한 학생의 기존 로그인은 종료됩니다.</p>'
    +'<label class="check"><input type="checkbox" name="confirmed" required> 선택한 학생의 비밀번호를 초기화합니다.</label>'
    +'<div id="studentResetResult" role="status"></div>';
   openDlg('학생 비밀번호 초기화',body,'비밀번호 초기화',async data=>{
    const target=choices.find(c=>c.account===data.account),result=$('#studentResetResult');
    if(!target||!data.confirmed){result.textContent='학생을 선택하고 확인해 주세요.';return false;}
+   if(data.password!==data.confirmPassword){result.textContent='새 비밀번호 확인이 일치하지 않습니다.';return false;}
    const close=form.querySelector("[data-close]");
    close.disabled=true;dlg.dataset.studentResetPending="1";
    try{
-    const response=await call('resetStudentPassword',{account:target.account,revision:target.revision,confirmed:true});
+    await call('resetStudentPassword',{account:target.account,revision:target.revision,confirmed:true,password:data.password,confirmPassword:data.confirmPassword});
     if(owner!==mediaOwner()||!result.isConnected||!dlg.open)return false;
+    form.querySelectorAll('input[type=password]').forEach(el=>{el.value='';});
     form.querySelectorAll('select,input').forEach(el=>{el.disabled=true;});
     $('#dlgOk').hidden=true;
     form.querySelector('[data-close]').textContent='닫기';
     result.innerHTML='<p><strong>'+esc(target.name+' · '+target.position)+' 초기화 완료</strong></p>'
-     +field('새 비밀번호','resultPassword',response.password,'text','readonly autocomplete="off"')
      +'<p class="ev-s">이 학생에게 직접 알려 주세요. 학생은 로그인 후 내 정보에서 비밀번호를 바꿀 수 있습니다.</p>';
     onSubmit=()=>true;
    }catch(e){if(result.isConnected)result.textContent=e.message;}
@@ -2940,7 +2943,12 @@ $('#main').addEventListener('click',e=>{
 
 /* ---------- 대화상자 ---------- */
 const dlg = $("#dlg"), form = $("#dlgForm"); let onSubmit = null;
-dlg.addEventListener("close",()=>form.querySelector("#studentResetResult")?.replaceChildren());
+dlg.addEventListener("close",()=>{
+ const result=form.querySelector("#studentResetResult");
+ if(!result)return;
+ form.querySelectorAll("input[type=password]").forEach(el=>{el.value="";});
+ result.replaceChildren();
+});
 dlg.addEventListener("cancel",e=>{if(dlg.dataset.studentResetPending)e.preventDefault();});
 $("#main").addEventListener("click", e => { const b = e.target.closest("[data-look-accent],[data-look-bg],[data-look-emoji],[data-look-icons],[data-look-size],[data-look-reset]"); if (!b) return; const d = b.dataset;
   if (d.lookAccent) setLook({ accent: d.lookAccent === "#d4561c" ? "" : d.lookAccent });
